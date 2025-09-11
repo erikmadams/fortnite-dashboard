@@ -257,66 +257,137 @@
         });
 
         function loadData() {
-            console.log('=== STARTING DATA LOAD ===');
+            console.log('=== STARTING REAL DATA LOAD FROM GOOGLE SHEETS ===');
+            loadRealData();
+        }
+
+        async function loadRealData() {
+            try {
+                console.log('Fetching data from Google Sheets...');
+                const response = await fetch(SHEET_CSV_URL);
+                const csvText = await response.text();
+                console.log('CSV data received, parsing...');
+                
+                parseCSVData(csvText);
+                
+                console.log('Generated', allData.length, 'games for', [...new Set(allData.map(d => d.teamName))].length, 'teams');
+                
+                filteredData = [...allData];
+                
+                console.log('=== CALLING UPDATE FUNCTIONS ===');
+                populateFilters();
+                updateStandings();
+                updateLeaderboards();
+                updateTeamStats();
+                updateRecentGames();
+                updateChart();
+                console.log('=== REAL DATA LOAD COMPLETE ===');
+                
+            } catch (error) {
+                console.error('Error loading real data:', error);
+                console.log('Data load failed, check your Google Sheets CSV URL and permissions');
+            }
+        }
+
+        function parseCSVData(csvText) {
+            const lines = csvText.split('\n');
+            const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+            
+            console.log('CSV Headers:', headers);
             
             allData = [];
-            const schools = [
-                'Arvin', 'Bakersfield High', 'Centennial', 'Highland', 'North', 'Stockdale', 
-                'Liberty', 'Vista', 'Bakersfield Christian', 'Central Valley', 'Cesar Chavez',
-                'Del Oro', 'Delano High', 'East High', 'Foothill', 'Frontier', 'Golden Valley',
-                'Independence', 'Mira Monte', 'Ridgeview', 'Robert F Kennedy', 'Shafter',
-                'South', 'Tierra Del Sol', 'Valley High', 'Vista West', 'Wasco', 'West'
-            ];
-            const teamSuffixes = ['Eagles', 'Warriors', 'Lions', 'Panthers'];
             
-            schools.forEach((school, schoolIndex) => {
-                // Give each school 1-2 teams to ensure we have 35+ teams total
-                const teamCount = Math.random() > 0.4 ? 2 : 1;
-                for (let t = 0; t < teamCount; t++) {
-                    const teamName = `${school} ${teamSuffixes[t]}`;
-                    const gamesCount = 15 + Math.floor(Math.random() * 10);
-                    
-                    for (let i = 0; i < gamesCount; i++) {
-                        let placement;
-                        // Create realistic placement distribution
-                        if (schoolIndex < 5) {
-                            placement = 1 + Math.floor(Math.random() * 25); // Top schools
-                        } else if (schoolIndex < 15) {
-                            placement = 1 + Math.floor(Math.random() * 50); // Mid schools
-                        } else {
-                            placement = 10 + Math.floor(Math.random() * 90); // Lower schools
-                        }
-                        
-                        const eliminations = Math.floor(Math.random() * 12) + (schoolIndex < 10 ? 1 : 0);
-                        const points = getPlacementPoints(placement) + getEliminationPoints(eliminations);
-                        
-                        allData.push({
-                            school: school,
-                            teamName: teamName,
-                            date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
-                            gameMode: Math.random() > 0.5 ? 'Battle Royale' : 'Zero Build',
-                            teamPlacement: placement,
-                            totalPoints: points,
-                            totalEliminations: eliminations
-                        });
-                    }
+            for (let i = 1; i < lines.length; i++) {
+                const line = lines[i].trim();
+                if (!line) continue;
+                
+                const values = parseCSVLine(line);
+                if (values.length < headers.length) continue;
+                
+                const row = {};
+                headers.forEach((header, index) => {
+                    row[header] = values[index] ? values[index].replace(/"/g, '').trim() : '';
+                });
+                
+                // Extract school from team name (before the first space + word)
+                const teamName = row['Team Name'] || '';
+                const schoolName = extractSchoolFromTeamName(teamName);
+                
+                const gameData = {
+                    timestamp: row['Timestamp'] || '',
+                    school: schoolName,
+                    teamName: teamName,
+                    date: row['Date'] || '',
+                    gameMode: row['Game Mode'] || '',
+                    teamPlacement: parseInt(row['Team Placement']) || 0,
+                    totalPoints: parseInt(row['Total Points']) || 0,
+                    p1Tag: row['P1 Tag'] || '',
+                    p1Elims: parseInt(row['P1 Elims']) || 0,
+                    p1Damage: parseInt(row['P1 Damage']) || 0,
+                    p1Accuracy: parseFloat(row['P1 Accuracy']) || 0,
+                    p2Tag: row['P2 Tag'] || '',
+                    p2Elims: parseInt(row['P2 Elims']) || 0,
+                    p2Damage: parseInt(row['P2 Damage']) || 0,
+                    p2Accuracy: parseFloat(row['P2 Accuracy']) || 0,
+                    p3Tag: row['P3 Tag'] || '',
+                    p3Elims: parseInt(row['P3 Elims']) || 0,
+                    p3Damage: parseInt(row['P3 Damage']) || 0,
+                    p3Accuracy: parseFloat(row['P3 Accuracy']) || 0,
+                    p4Tag: row['P4 Tag'] || '',
+                    p4Elims: parseInt(row['P4 Elims']) || 0,
+                    p4Damage: parseInt(row['P4 Damage']) || 0,
+                    p4Accuracy: parseFloat(row['P4 Accuracy']) || 0,
+                    totalEliminations: parseInt(row['Total Eliminations']) || 0
+                };
+                
+                if (gameData.teamName && gameData.teamPlacement > 0) {
+                    allData.push(gameData);
                 }
-            });
+            }
             
-            const uniqueTeams = [...new Set(allData.map(d => d.teamName))].length;
-            console.log('Generated', allData.length, 'games for', uniqueTeams, 'teams');
-            console.log('Sample game:', allData[0]);
+            console.log('Parsed', allData.length, 'valid game records');
+        }
+
+        function parseCSVLine(line) {
+            const values = [];
+            let current = '';
+            let inQuotes = false;
             
-            filteredData = [...allData];
+            for (let i = 0; i < line.length; i++) {
+                const char = line[i];
+                
+                if (char === '"') {
+                    inQuotes = !inQuotes;
+                } else if (char === ',' && !inQuotes) {
+                    values.push(current);
+                    current = '';
+                } else {
+                    current += char;
+                }
+            }
+            values.push(current);
             
-            console.log('=== CALLING UPDATE FUNCTIONS ===');
-            populateFilters();
-            updateStandings();
-            updateLeaderboards();
-            updateTeamStats();
-            updateRecentGames();
-            updateChart();
-            console.log('=== DATA LOAD COMPLETE ===');
+            return values;
+        }
+
+        function extractSchoolFromTeamName(teamName) {
+            if (!teamName) return '';
+            
+            // Handle common team name patterns
+            // "School Name TeamSuffix" -> "School Name"
+            const words = teamName.split(' ');
+            if (words.length <= 1) return teamName;
+            
+            // Remove common team suffixes
+            const suffixes = ['Eagles', 'Warriors', 'Lions', 'Panthers', 'Storm', 'Tigers', 'Wildcats', 'Hawks', 'Bears'];
+            const lastWord = words[words.length - 1];
+            
+            if (suffixes.includes(lastWord)) {
+                return words.slice(0, -1).join(' ');
+            }
+            
+            // If no recognized suffix, assume the last word is the team name
+            return words.slice(0, -1).join(' ') || teamName;
         }
 
         function getPlacementPoints(placement) {
@@ -368,7 +439,51 @@
                 modeFilter.appendChild(option);
             });
             
+            // Add event listeners for cascading dropdowns
+            schoolFilter.addEventListener('change', onSchoolFilterChange);
+            teamFilter.addEventListener('change', onTeamFilterChange);
+            
             console.log('Filters populated:', schools.length, 'schools,', teams.length, 'teams,', modes.length, 'modes');
+        }
+
+        function onSchoolFilterChange() {
+            const selectedSchool = document.getElementById('schoolFilter').value;
+            const teamFilter = document.getElementById('teamFilter');
+            
+            // Clear current team selection
+            teamFilter.value = '';
+            
+            // Get teams for selected school
+            let availableTeams;
+            if (selectedSchool) {
+                availableTeams = [...new Set(allData
+                    .filter(row => row.school === selectedSchool)
+                    .map(row => row.teamName))];
+            } else {
+                availableTeams = [...new Set(allData.map(row => row.teamName))];
+            }
+            
+            // Rebuild team dropdown
+            teamFilter.innerHTML = '<option value="">All Teams</option>';
+            availableTeams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                teamFilter.appendChild(option);
+            });
+        }
+
+        function onTeamFilterChange() {
+            const selectedTeam = document.getElementById('teamFilter').value;
+            const schoolFilter = document.getElementById('schoolFilter');
+            
+            if (selectedTeam) {
+                // Find the school for this team
+                const teamSchool = allData.find(row => row.teamName === selectedTeam)?.school;
+                if (teamSchool) {
+                    schoolFilter.value = teamSchool;
+                }
+            }
         }
 
         function updateTeamStats() {
