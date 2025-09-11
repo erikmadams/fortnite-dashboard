@@ -244,6 +244,9 @@
     </div>
 
     <script>
+        // Google Sheets CSV URL
+        const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS2WOF19jlQP7CuF1eG7rzVxEZybL6637Lo6lhZluKscRDl2VcIoMi_FPIkTM6PWeyXzLWDUc7amqO2/pub?output=csv';
+        
         let allData = [];
         let filteredData = [];
         let isStandingsExpanded = false;
@@ -264,7 +267,17 @@
         async function loadRealData() {
             try {
                 console.log('Fetching data from Google Sheets...');
-                const response = await fetch(SHEET_CSV_URL);
+                
+                // Use CORS proxy directly since it works
+                const proxyUrl = 'https://api.allorigins.win/raw?url=';
+                const targetUrl = encodeURIComponent(SHEET_CSV_URL);
+                
+                const response = await fetch(proxyUrl + targetUrl);
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                }
+                
                 const csvText = await response.text();
                 console.log('CSV data received, parsing...');
                 
@@ -284,8 +297,42 @@
                 console.log('=== REAL DATA LOAD COMPLETE ===');
                 
             } catch (error) {
-                console.error('Error loading real data:', error);
-                console.log('Data load failed, check your Google Sheets CSV URL and permissions');
+                console.error('CORS proxy failed:', error);
+                console.log('Trying direct method...');
+                
+                // Fallback to direct method
+                try {
+                    const response = await fetch(SHEET_CSV_URL, {
+                        method: 'GET',
+                        mode: 'cors',
+                        headers: {
+                            'Accept': 'text/csv,text/plain,*/*'
+                        }
+                    });
+                    
+                    if (response.ok) {
+                        const csvText = await response.text();
+                        console.log('Direct method successful, parsing CSV data...');
+                        parseCSVData(csvText);
+                        
+                        filteredData = [...allData];
+                        
+                        populateFilters();
+                        updateStandings();
+                        updateLeaderboards();
+                        updateTeamStats();
+                        updateRecentGames();
+                        updateChart();
+                        console.log('=== DIRECT DATA LOAD COMPLETE ===');
+                        
+                    } else {
+                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                    }
+                    
+                } catch (directError) {
+                    console.error('Both methods failed:', directError);
+                    console.log('Data load failed, check your Google Sheets CSV URL and permissions');
+                }
             }
         }
 
@@ -309,9 +356,9 @@
                     row[header] = values[index] ? values[index].replace(/"/g, '').trim() : '';
                 });
                 
-                // Extract school from team name (before the first space + word)
+                // Get school and team name directly from columns
                 const teamName = row['Team Name'] || '';
-                const schoolName = extractSchoolFromTeamName(teamName);
+                const schoolName = row['School'] || '';
                 
                 const gameData = {
                     timestamp: row['Timestamp'] || '',
