@@ -1,10 +1,10 @@
 # KSEL Fortnite Team Analytics Dashboard
 
-A comprehensive web-based analytics dashboard for tracking KSEL (Kern Schools Esports League) Fortnite team performance throughout the competitive season.
+A comprehensive web-based analytics dashboard for tracking KSEL (Kern Scholastic Esports League) Fortnite team performance throughout the competitive season.
 
 ## Live Dashboard
 
-🔗 **[View Live Dashboard](https://yourusername.github.io/ksel-fortnite-dashboard)**
+🔗 **[View Live Dashboard](https://erikmadams.github.io/fortnite-dashboard)**
 
 *Replace `yourusername` with your actual GitHub username*
 
@@ -166,5 +166,5 @@ Created for educational use within the Kern Schools Esports League.
 
 ---
 
-**Kern Schools Esports League - Fortnite Division**  
+**Kern Scholastic Esports League**  
 *Tracking Victory Royales and Building Champions*
