@@ -6,8 +6,6 @@ A comprehensive web-based analytics dashboard for tracking KSEL (Kern Scholastic
 
 🔗 **[View Live Dashboard](https://erikmadams.github.io/fortnite-dashboard)**
 
-*Replace `yourusername` with your actual GitHub username*
-
 ## Features
 
 ### Season Standings
