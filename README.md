@@ -4,7 +4,7 @@ A comprehensive web-based analytics dashboard for tracking KSEL (Kern Scholastic
 
 ## Live Dashboard
 
-🔗 **[View Live Dashboard](https://erikmadams.github.io/fortnite-dashboard)**
+**Students and Coaches:** Access the leaderboard at: [[https://erikmadams.github.io/fortnite-dashboard](https://erikmadams.github.io/fortnite-dashboard/)]
 
 ## Features
 
