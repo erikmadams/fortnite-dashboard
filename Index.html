@@ -1,0 +1,784 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KSEL Team Analytics Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- Header -->
+        <div class="bg-white rounded-xl shadow-lg mb-6 p-6 border-l-4 border-red-500">
+            <div class="flex items-center justify-between mb-0 min-h-[72px]">
+                <div class="flex items-center">
+                    <img src="https://raw.githubusercontent.com/erikmadams/ksel-fortnite-results/main/KSEL_Header_Black_48x198.png" alt="KSEL Logo" style="height: 48px; width: 198px;" class="rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="flex items-center justify-center text-white font-bold rounded text-lg" style="background-color: #EE2A3E; height: 48px; width: 198px; display: none;">
+                        KSEL
+                    </div>
+                </div>
+                
+                <div class="flex-1 text-center">
+                    <h1 class="text-3xl font-bold text-gray-800">Team Analytics Dashboard</h1>
+                    <p class="text-gray-600">Performance tracking and statistics</p>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="loadData()" class="text-white px-6 rounded-lg inline-flex items-center justify-center text-center gap-2 font-medium transition-colors hover:opacity-90 h-11" style="background-color: #EE2A3E">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Season Standings -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="trophy" class="w-5 h-5 text-yellow-600"></i>
+                    Season Standings
+                </h2>
+                <button 
+                    id="expandStandingsBtn"
+                    onclick="toggleStandings()"
+                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-medium transition-colors text-sm"
+                >
+                    <i data-lucide="expand" class="w-4 h-4" id="expandIcon"></i>
+                    <span id="expandText">Show All Teams</span>
+                </button>
+            </div>
+            
+            <div id="standingsContainer">
+                <div id="top30Standings" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="col-span-3 text-center text-gray-500 py-8">
+                        Loading team standings...
+                    </div>
+                </div>
+                
+                <div id="allStandings" style="display: none;" class="space-y-2">
+                    <!-- All teams will be populated here when expanded -->
+                </div>
+            </div>
+            
+            <div class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                <div class="flex items-center gap-2 text-sm mb-2">
+                    <i data-lucide="info" class="w-4 h-4 text-yellow-600"></i>
+                    <span class="font-medium text-yellow-800">Playoff Info:</span>
+                    <span class="text-yellow-700">Top 80 teams qualify for playoffs</span>
+                </div>
+                
+                <div class="flex flex-wrap items-center gap-4 text-xs">
+                    <div class="flex items-center gap-1">
+                        <i data-lucide="check-circle" class="w-3 h-3 text-green-600"></i>
+                        <span class="text-green-700 font-medium">Clinched</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <i data-lucide="minus-circle" class="w-3 h-3 text-red-600"></i>
+                        <span class="text-red-700 font-medium">Eliminated</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="w-3 h-3 rounded-full bg-yellow-600"></span>
+                        <span class="text-gray-700">1st</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="w-3 h-3 rounded-full bg-gray-600"></span>
+                        <span class="text-gray-700">2nd-3rd</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="w-3 h-3 rounded-full bg-blue-600"></span>
+                        <span class="text-gray-700">Top 10</span>
+                    </div>
+                    <div class="flex items-center gap-1">
+                        <span class="w-3 h-3 rounded-full bg-green-600"></span>
+                        <span class="text-gray-700">Playoffs (4th-80th)</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Leaderboards Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="medal" class="w-5 h-5 text-yellow-500"></i>
+                    Best Teams (Avg Placement)
+                </h3>
+                <div id="teamLeaderboard" class="space-y-2">
+                    <div class="text-gray-500 text-center py-4">Loading...</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="target" class="w-5 h-5 text-blue-500"></i>
+                    Highest Scoring Teams
+                </h3>
+                <div id="pointsLeaderboard" class="space-y-2">
+                    <div class="text-gray-500 text-center py-4">Loading...</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="crosshair" class="w-5 h-5 text-red-500"></i>
+                    Most Eliminations
+                </h3>
+                <div id="elimsLeaderboard" class="space-y-2">
+                    <div class="text-gray-500 text-center py-4">Loading...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Panel -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 text-left flex items-center gap-2">
+                <i data-lucide="filter" class="w-5 h-5 text-red-600"></i>
+                Filter Options
+            </h2>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">School</label>
+                    <select id="schoolFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Schools</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Team</label>
+                    <select id="teamFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Teams</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Game Mode</label>
+                    <select id="gameModeFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Modes</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button onclick="applyFilters()" class="text-white px-6 rounded-lg inline-flex items-center justify-center text-center gap-2 font-medium transition-colors hover:opacity-90 h-11 w-full" style="background-color: #EE2A3E">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        Apply Filters
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Team Performance Summary -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 text-left flex items-center gap-2">
+                <i data-lucide="trophy" class="w-5 h-5 text-red-600"></i>
+                Team Performance Summary
+            </h2>
+            
+            <div id="teamStats" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+                <!-- Victory Royales -->
+                <div class="bg-yellow-50 rounded-lg p-4 text-center border border-yellow-200">
+                    <div class="text-3xl font-bold text-yellow-600" id="victoryRoyales">0</div>
+                    <div class="text-sm font-medium text-yellow-800">VICTORY ROYALES</div>
+                    <div class="text-xs text-yellow-600" id="winRate">0% WIN RATE</div>
+                </div>
+                
+                <!-- Matches Played -->
+                <div class="bg-blue-50 rounded-lg p-4 text-center border border-blue-200">
+                    <div class="text-3xl font-bold text-blue-600" id="matchesPlayed">0</div>
+                    <div class="text-sm font-medium text-blue-800">MATCHES PLAYED</div>
+                </div>
+                
+                <!-- TOP 5 MOVED TO 3RD POSITION -->
+                <div class="bg-green-50 rounded-lg p-4 text-center border border-green-200">
+                    <div class="text-3xl font-bold text-green-600" id="top5Count">0</div>
+                    <div class="text-sm font-medium text-green-800">TOP 5</div>
+                    <div class="text-xs text-green-600" id="top5Rate">0% OF GAMES</div>
+                </div>
+                
+                <!-- TOP 10 MOVED TO 4TH POSITION -->
+                <div class="bg-purple-50 rounded-lg p-4 text-center border border-purple-200">
+                    <div class="text-3xl font-bold text-purple-600" id="top10Count">0</div>
+                    <div class="text-sm font-medium text-purple-800">TOP 10</div>
+                    <div class="text-xs text-purple-600" id="top10Rate">0% OF GAMES</div>
+                </div>
+                
+                <!-- Avg Eliminations -->
+                <div class="bg-orange-50 rounded-lg p-4 text-center border border-orange-200">
+                    <div class="text-3xl font-bold text-orange-600" id="avgElims">0</div>
+                    <div class="text-sm font-medium text-orange-800">AVG ELIMINATIONS</div>
+                </div>
+                
+                <!-- Total Eliminations -->
+                <div class="bg-red-50 rounded-lg p-4 text-center border border-red-200">
+                    <div class="text-3xl font-bold text-red-600" id="totalElims">0</div>
+                    <div class="text-sm font-medium text-red-800">TOTAL</div>
+                    <div class="text-xs text-red-600">ELIMINATIONS</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Trends Panel -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 text-left flex items-center gap-2">
+                <i data-lucide="trending-up" class="w-5 h-5 text-purple-500"></i>
+                Performance Trends
+            </h2>
+            <div class="h-96">
+                <canvas id="performanceChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Recent Games -->
+        <div class="bg-white rounded-xl shadow-lg p-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-4 text-left flex items-center gap-2">
+                <i data-lucide="clock" class="w-5 h-5 text-green-500"></i>
+                Recent Games
+            </h2>
+            <div id="recentGames">
+                <div class="text-gray-500 text-center py-8">Loading recent games...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let isStandingsExpanded = false;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM Content Loaded');
+            lucide.createIcons();
+            setTimeout(() => {
+                loadData();
+            }, 100);
+        });
+
+        function loadData() {
+            console.log('=== STARTING DATA LOAD ===');
+            
+            allData = [];
+            const schools = [
+                'Arvin', 'Bakersfield High', 'Centennial', 'Highland', 'North', 'Stockdale', 
+                'Liberty', 'Vista', 'Bakersfield Christian', 'Central Valley', 'Cesar Chavez',
+                'Del Oro', 'Delano High', 'East High', 'Foothill', 'Frontier', 'Golden Valley',
+                'Independence', 'Mira Monte', 'Ridgeview', 'Robert F Kennedy', 'Shafter',
+                'South', 'Tierra Del Sol', 'Valley High', 'Vista West', 'Wasco', 'West'
+            ];
+            const teamSuffixes = ['Eagles', 'Warriors', 'Lions', 'Panthers'];
+            
+            schools.forEach((school, schoolIndex) => {
+                // Give each school 1-2 teams to ensure we have 35+ teams total
+                const teamCount = Math.random() > 0.4 ? 2 : 1;
+                for (let t = 0; t < teamCount; t++) {
+                    const teamName = `${school} ${teamSuffixes[t]}`;
+                    const gamesCount = 15 + Math.floor(Math.random() * 10);
+                    
+                    for (let i = 0; i < gamesCount; i++) {
+                        let placement;
+                        // Create realistic placement distribution
+                        if (schoolIndex < 5) {
+                            placement = 1 + Math.floor(Math.random() * 25); // Top schools
+                        } else if (schoolIndex < 15) {
+                            placement = 1 + Math.floor(Math.random() * 50); // Mid schools
+                        } else {
+                            placement = 10 + Math.floor(Math.random() * 90); // Lower schools
+                        }
+                        
+                        const eliminations = Math.floor(Math.random() * 12) + (schoolIndex < 10 ? 1 : 0);
+                        const points = getPlacementPoints(placement) + getEliminationPoints(eliminations);
+                        
+                        allData.push({
+                            school: school,
+                            teamName: teamName,
+                            date: new Date(Date.now() - Math.random() * 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+                            gameMode: Math.random() > 0.5 ? 'Battle Royale' : 'Zero Build',
+                            teamPlacement: placement,
+                            totalPoints: points,
+                            totalEliminations: eliminations
+                        });
+                    }
+                }
+            });
+            
+            const uniqueTeams = [...new Set(allData.map(d => d.teamName))].length;
+            console.log('Generated', allData.length, 'games for', uniqueTeams, 'teams');
+            console.log('Sample game:', allData[0]);
+            
+            filteredData = [...allData];
+            
+            console.log('=== CALLING UPDATE FUNCTIONS ===');
+            populateFilters();
+            updateStandings();
+            updateLeaderboards();
+            updateTeamStats();
+            updateRecentGames();
+            updateChart();
+            console.log('=== DATA LOAD COMPLETE ===');
+        }
+
+        function getPlacementPoints(placement) {
+            if (placement === 1) return 25;
+            if (placement >= 2 && placement <= 5) return 20;
+            if (placement >= 6 && placement <= 9) return 15;
+            if (placement >= 10 && placement <= 18) return 10;
+            if (placement >= 19 && placement <= 25) return 5;
+            return 0;
+        }
+
+        function getEliminationPoints(eliminations) {
+            return Math.min(eliminations * 4, 50);
+        }
+
+        function populateFilters() {
+            console.log('Populating filters...');
+            const schools = [...new Set(allData.map(row => row.school))];
+            const teams = [...new Set(allData.map(row => row.teamName))];
+            const modes = [...new Set(allData.map(row => row.gameMode))];
+            
+            const schoolFilter = document.getElementById('schoolFilter');
+            const teamFilter = document.getElementById('teamFilter');
+            const modeFilter = document.getElementById('gameModeFilter');
+            
+            // Clear existing options except first
+            schoolFilter.innerHTML = '<option value="">All Schools</option>';
+            teamFilter.innerHTML = '<option value="">All Teams</option>';
+            modeFilter.innerHTML = '<option value="">All Modes</option>';
+            
+            schools.forEach(school => {
+                const option = document.createElement('option');
+                option.value = school;
+                option.textContent = school;
+                schoolFilter.appendChild(option);
+            });
+            
+            teams.forEach(team => {
+                const option = document.createElement('option');
+                option.value = team;
+                option.textContent = team;
+                teamFilter.appendChild(option);
+            });
+            
+            modes.forEach(mode => {
+                const option = document.createElement('option');
+                option.value = mode;
+                option.textContent = mode;
+                modeFilter.appendChild(option);
+            });
+            
+            console.log('Filters populated:', schools.length, 'schools,', teams.length, 'teams,', modes.length, 'modes');
+        }
+
+        function updateTeamStats() {
+            console.log('=== UPDATING TEAM STATS ===');
+            console.log('filteredData length:', filteredData.length);
+            
+            const gamesPlayed = filteredData.length;
+            if (gamesPlayed === 0) {
+                console.log('No filtered data available');
+                return;
+            }
+            
+            const wins = filteredData.filter(row => row.teamPlacement === 1).length;
+            const top5s = filteredData.filter(row => row.teamPlacement <= 5).length;
+            const top10s = filteredData.filter(row => row.teamPlacement <= 10).length;
+            const totalEliminations = filteredData.reduce((sum, row) => sum + row.totalEliminations, 0);
+            
+            const winRate = ((wins / gamesPlayed) * 100).toFixed(0);
+            const top5Rate = ((top5s / gamesPlayed) * 100).toFixed(0);
+            const top10Rate = ((top10s / gamesPlayed) * 100).toFixed(0);
+            const avgElims = (totalEliminations / gamesPlayed).toFixed(0);
+            
+            console.log('Calculated stats:', {
+                gamesPlayed, wins, top5s, top10s, totalEliminations,
+                winRate, top5Rate, top10Rate, avgElims
+            });
+            
+            // Update DOM elements
+            document.getElementById('matchesPlayed').textContent = gamesPlayed;
+            document.getElementById('victoryRoyales').textContent = wins;
+            document.getElementById('winRate').textContent = `${winRate}% WIN RATE`;
+            document.getElementById('top5Count').textContent = top5s;
+            document.getElementById('top5Rate').textContent = `${top5Rate}% OF GAMES`;
+            document.getElementById('top10Count').textContent = top10s;
+            document.getElementById('top10Rate').textContent = `${top10Rate}% OF GAMES`;
+            document.getElementById('avgElims').textContent = avgElims;
+            document.getElementById('totalElims').textContent = totalEliminations;
+            
+            console.log('Team stats DOM updated');
+        }
+
+        function updateStandings() {
+            console.log('=== UPDATING STANDINGS ===');
+            const standings = calculateTeamStandings();
+            console.log('Calculated', standings.length, 'team standings');
+            updateTop30Standings(standings.slice(0, 30));
+            updateAllStandings(standings);
+        }
+
+        function calculateTeamStandings() {
+            const teamStats = {};
+            
+            allData.forEach(row => {
+                if (!teamStats[row.teamName]) {
+                    teamStats[row.teamName] = { totalPoints: 0, games: 0, wins: 0, top5s: 0, totalElims: 0 };
+                }
+                teamStats[row.teamName].totalPoints += row.totalPoints;
+                teamStats[row.teamName].games++;
+                if (row.teamPlacement === 1) teamStats[row.teamName].wins++;
+                if (row.teamPlacement <= 5) teamStats[row.teamName].top5s++;
+                teamStats[row.teamName].totalElims += row.totalEliminations;
+            });
+            
+            return Object.entries(teamStats)
+                .map(([team, stats]) => ({ team, ...stats }))
+                .sort((a, b) => b.totalPoints - a.totalPoints)
+                .map((team, index) => ({ ...team, rank: index + 1, clinched: index < 80 }));
+        }
+
+        function updateTop30Standings(top30) {
+            console.log('Updating top 30 standings with', top30.length, 'teams');
+            const columns = [top30.slice(0, 10), top30.slice(10, 20), top30.slice(20, 30)];
+            
+            const container = document.getElementById('top30Standings');
+            container.innerHTML = columns.map((column, colIndex) => `
+                <div class="space-y-2">
+                    <h4 class="text-sm font-semibold text-gray-600 mb-3 text-center">
+                        ${colIndex === 0 ? 'Top 10' : colIndex === 1 ? 'Ranks 11-20' : 'Ranks 21-30'}
+                    </h4>
+                    ${column.map(team => `
+                        <div class="flex items-center justify-between p-3 rounded-lg transition-colors ${getRankingStyling(team.rank)}">
+                            <div class="flex items-center gap-3">
+                                <span class="w-6 h-6 rounded-full ${getRankBadgeColor(team.rank)} text-white text-xs font-bold flex items-center justify-center">
+                                    ${team.rank}
+                                </span>
+                                <span class="font-medium text-gray-800 text-sm">${team.team}</span>
+                                ${team.clinched ? '<i data-lucide="check-circle" class="w-4 h-4 text-green-600 ml-1"></i>' : ''}
+                            </div>
+                            <div class="text-right">
+                                <div class="font-bold text-gray-900 text-sm">${team.totalPoints}</div>
+                                <div class="text-xs text-gray-500">${team.games} games</div>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `).join('');
+            
+            lucide.createIcons();
+        }
+
+        function updateAllStandings(standings) {
+            const container = document.getElementById('allStandings');
+            
+            container.innerHTML = `
+                <div class="flex items-center justify-between p-2 bg-gray-100 border-b-2 border-gray-200 font-semibold text-sm text-gray-700">
+                    <div class="flex items-center gap-3">
+                        <span class="w-8 h-6 flex items-center justify-center">Rank</span>
+                        <span>Team Name</span>
+                    </div>
+                    <div class="flex items-center text-xs">
+                        <span class="font-semibold w-20 text-center">Total Points</span>
+                        <span class="text-gray-600 w-12 text-center">Games</span>
+                        <span class="text-gray-600 w-12 text-center">Wins</span>
+                        <span class="text-gray-600 w-12 text-center">Top 5</span>
+                        <span class="text-gray-600 w-16 text-center">Eliminations</span>
+                    </div>
+                </div>
+                
+                <div class="space-y-1">
+                    ${standings.map(team => `
+                        <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors">
+                            <div class="flex items-center gap-3">
+                                <span class="w-8 h-6 rounded ${getRankBadgeColor(team.rank)} text-white text-xs font-bold flex items-center justify-center">
+                                    ${team.rank}
+                                </span>
+                                <span class="font-medium text-gray-800">${team.team}</span>
+                                ${team.clinched ? '<i data-lucide="check-circle" class="w-4 h-4 text-green-600 ml-1"></i>' : ''}
+                            </div>
+                            <div class="flex items-center text-sm">
+                                <span class="font-bold text-gray-900 w-20 text-center">${team.totalPoints.toLocaleString()}</span>
+                                <span class="text-gray-500 w-12 text-center">${team.games}G</span>
+                                <span class="text-gray-500 w-12 text-center">${team.wins}W</span>
+                                <span class="text-gray-500 w-12 text-center">${team.top5s} T5</span>
+                                <span class="text-gray-500 w-16 text-center">${team.totalElims} Elims</span>
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+        }
+
+        function getRankingStyling(rank) {
+            if (rank === 1) return 'bg-gradient-to-r from-yellow-100 to-yellow-200 border border-yellow-300';
+            if (rank <= 3) return 'bg-gradient-to-r from-gray-100 to-gray-200 border border-gray-300';
+            if (rank <= 10) return 'bg-blue-50 border border-blue-200';
+            if (rank <= 80) return 'bg-green-50 border border-green-200';
+            return 'bg-gray-50 border border-gray-200';
+        }
+
+        function getRankBadgeColor(rank) {
+            if (rank === 1) return 'bg-yellow-600';
+            if (rank <= 3) return 'bg-gray-600';
+            if (rank <= 10) return 'bg-blue-600';
+            if (rank <= 80) return 'bg-green-600';
+            return 'bg-gray-500';
+        }
+
+        function toggleStandings() {
+            const top30Container = document.getElementById('top30Standings');
+            const allContainer = document.getElementById('allStandings');
+            const expandText = document.getElementById('expandText');
+            const expandIcon = document.getElementById('expandIcon');
+            
+            isStandingsExpanded = !isStandingsExpanded;
+            
+            if (isStandingsExpanded) {
+                top30Container.style.display = 'none';
+                allContainer.style.display = 'block';
+                expandText.textContent = 'Show Top 30';
+                expandIcon.setAttribute('data-lucide', 'compress');
+            } else {
+                top30Container.style.display = 'grid';
+                allContainer.style.display = 'none';
+                expandText.textContent = 'Show All Teams';
+                expandIcon.setAttribute('data-lucide', 'expand');
+            }
+            
+            lucide.createIcons();
+        }
+
+        function updateLeaderboards() {
+            console.log('=== UPDATING LEADERBOARDS ===');
+            updateTeamLeaderboard();
+            updatePointsLeaderboard();
+            updateElimsLeaderboard();
+        }
+
+        function updateTeamLeaderboard() {
+            const teamStats = {};
+            allData.forEach(row => {
+                if (!teamStats[row.teamName]) teamStats[row.teamName] = { placements: [] };
+                teamStats[row.teamName].placements.push(row.teamPlacement);
+            });
+            
+            const leaderboard = Object.entries(teamStats)
+                .map(([team, stats]) => ({
+                    team,
+                    avgPlacement: stats.placements.reduce((a, b) => a + b, 0) / stats.placements.length
+                }))
+                .sort((a, b) => a.avgPlacement - b.avgPlacement)
+                .slice(0, 5);
+            
+            document.getElementById('teamLeaderboard').innerHTML = leaderboard.map((item, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-yellow-100 text-yellow-800 text-sm font-bold flex items-center justify-center">${index + 1}</span>
+                        <span class="font-medium text-gray-800">${item.team}</span>
+                    </div>
+                    <span class="font-bold text-yellow-600">${item.avgPlacement.toFixed(1)}</span>
+                </div>
+            `).join('');
+        }
+
+        function updatePointsLeaderboard() {
+            const teamStats = {};
+            allData.forEach(row => {
+                if (!teamStats[row.teamName]) teamStats[row.teamName] = { points: [] };
+                teamStats[row.teamName].points.push(row.totalPoints);
+            });
+            
+            const leaderboard = Object.entries(teamStats)
+                .map(([team, stats]) => ({
+                    team,
+                    avgPoints: Math.round(stats.points.reduce((a, b) => a + b, 0) / stats.points.length)
+                }))
+                .sort((a, b) => b.avgPoints - a.avgPoints)
+                .slice(0, 5);
+            
+            document.getElementById('pointsLeaderboard').innerHTML = leaderboard.map((item, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold flex items-center justify-center">${index + 1}</span>
+                        <span class="font-medium text-gray-800">${item.team}</span>
+                    </div>
+                    <span class="font-bold text-blue-600">${item.avgPoints}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateElimsLeaderboard() {
+            const teamStats = {};
+            allData.forEach(row => {
+                if (!teamStats[row.teamName]) teamStats[row.teamName] = { elims: [] };
+                teamStats[row.teamName].elims.push(row.totalEliminations);
+            });
+            
+            const leaderboard = Object.entries(teamStats)
+                .map(([team, stats]) => ({
+                    team,
+                    avgElims: (stats.elims.reduce((a, b) => a + b, 0) / stats.elims.length).toFixed(1)
+                }))
+                .sort((a, b) => parseFloat(b.avgElims) - parseFloat(a.avgElims))
+                .slice(0, 5);
+            
+            document.getElementById('elimsLeaderboard').innerHTML = leaderboard.map((item, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-3">
+                        <span class="w-6 h-6 rounded-full bg-red-100 text-red-800 text-sm font-bold flex items-center justify-center">${index + 1}</span>
+                        <span class="font-medium text-gray-800">${item.team}</span>
+                    </div>
+                    <span class="font-bold text-red-600">${item.avgElims}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateRecentGames() {
+            console.log('=== UPDATING RECENT GAMES ===');
+            const recent = allData.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+            console.log('Recent games:', recent.length);
+            
+            document.getElementById('recentGames').innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-700">Date</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-700">School</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-700">Team</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Placement</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Points</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Eliminations</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            ${recent.map(game => `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-3 text-sm">${game.date}</td>
+                                    <td class="px-3 py-3 text-sm">${game.school}</td>
+                                    <td class="px-3 py-3 text-sm font-medium">${game.teamName}</td>
+                                    <td class="px-2 py-3 text-sm text-center font-bold ${game.teamPlacement <= 5 ? 'text-green-600' : 'text-gray-600'}">${game.teamPlacement}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${game.totalPoints}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${game.totalEliminations}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
+            console.log('Recent games table updated');
+        }
+
+        function updateChart() {
+            console.log('=== UPDATING CHART ===');
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            
+            if (window.performanceChart instanceof Chart) {
+                window.performanceChart.destroy();
+            }
+            
+            const chartData = allData
+                .sort((a, b) => new Date(a.date) - new Date(b.date))
+                .slice(-20);
+            
+            console.log('Chart data points:', chartData.length);
+            
+            window.performanceChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: chartData.map(game => game.date),
+                    datasets: [{
+                        label: 'Team Placement',
+                        data: chartData.map(game => game.teamPlacement),
+                        borderColor: '#EE2A3E',
+                        backgroundColor: 'rgba(238, 42, 62, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'placement',
+                        fill: true
+                    }, {
+                        label: 'Total Points',
+                        data: chartData.map(game => game.totalPoints),
+                        borderColor: '#3B82F6',
+                        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+                        tension: 0.4,
+                        yAxisID: 'points',
+                        fill: false
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false,
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                        }
+                    },
+                    scales: {
+                        placement: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            reverse: true,
+                            min: 1,
+                            max: 100,
+                            title: {
+                                display: true,
+                                text: 'Placement',
+                                color: '#EE2A3E'
+                            },
+                            ticks: {
+                                color: '#EE2A3E'
+                            }
+                        },
+                        points: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'Points',
+                                color: '#3B82F6'
+                            },
+                            ticks: {
+                                color: '#3B82F6'
+                            },
+                            grid: {
+                                drawOnChartArea: false,
+                            }
+                        }
+                    }
+                }
+            });
+            console.log('Chart created successfully');
+        }
+
+        function applyFilters() {
+            console.log('=== APPLYING FILTERS ===');
+            const schoolFilter = document.getElementById('schoolFilter').value;
+            const teamFilter = document.getElementById('teamFilter').value;
+            const gameModeFilter = document.getElementById('gameModeFilter').value;
+            
+            console.log('Filter values:', { schoolFilter, teamFilter, gameModeFilter });
+            
+            filteredData = allData.filter(row => {
+                const matchesSchool = !schoolFilter || row.school === schoolFilter;
+                const matchesTeam = !teamFilter || row.teamName === teamFilter;
+                const matchesMode = !gameModeFilter || row.gameMode === gameModeFilter;
+                
+                return matchesSchool && matchesTeam && matchesMode;
+            });
+            
+            console.log('Filtered to', filteredData.length, 'games');
+            
+            updateTeamStats();
+            updateRecentGames();
+            updateChart();
+        }
+    </script>
+</body>
+</html>
