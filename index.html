@@ -41,14 +41,26 @@
                     <i data-lucide="trophy" class="w-5 h-5 text-yellow-600"></i>
                     Season Standings
                 </h2>
-                <button 
-                    id="expandStandingsBtn"
-                    onclick="toggleStandings()"
-                    class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-medium transition-colors text-sm"
-                >
-                    <i data-lucide="expand" class="w-4 h-4" id="expandIcon"></i>
-                    <span id="expandText">Show All Teams</span>
-                </button>
+                <div class="flex items-center gap-3">
+                    <!-- Game Mode Filter for Standings -->
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-700">Mode:</label>
+                        <select id="standingsGameModeFilter" onchange="updateStandingsForGameMode()" class="h-9 border border-gray-300 rounded-lg px-3 py-1 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm">
+                            <option value="">All Modes</option>
+                            <option value="Battle Royale">Battle Royale</option>
+                            <option value="Zero Build">Zero Build</option>
+                        </select>
+                    </div>
+                    
+                    <button 
+                        id="expandStandingsBtn"
+                        onclick="toggleStandings()"
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-medium transition-colors text-sm"
+                    >
+                        <i data-lucide="expand" class="w-4 h-4" id="expandIcon"></i>
+                        <span id="expandText">Show All Teams</span>
+                    </button>
+                </div>
             </div>
             
             <div id="standingsContainer">
@@ -250,6 +262,7 @@
         let allData = [];
         let filteredData = [];
         let isStandingsExpanded = false;
+        let currentStandingsGameMode = '';
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded');
@@ -572,18 +585,55 @@
             console.log('Team stats DOM updated');
         }
 
+        // NEW FUNCTION: Update standings when game mode filter changes
+        function updateStandingsForGameMode() {
+            currentStandingsGameMode = document.getElementById('standingsGameModeFilter').value;
+            console.log('Updating standings for game mode:', currentStandingsGameMode || 'All Modes');
+            updateStandings();
+        }
+
         function updateStandings() {
             console.log('=== UPDATING STANDINGS ===');
             const standings = calculateTeamStandings();
-            console.log('Calculated', standings.length, 'team standings');
+            console.log('Calculated', standings.length, 'team standings for mode:', currentStandingsGameMode || 'All Modes');
             updateTop30Standings(standings.slice(0, 30));
             updateAllStandings(standings);
         }
 
+        // MODIFIED FUNCTION: Calculate standings with game mode filter
         function calculateTeamStandings() {
             const teamStats = {};
             
-            allData.forEach(row => {
+            // Filter data by current standings game mode if selected
+            let dataToUse = allData;
+            if (currentStandingsGameMode) {
+                // Debug: Log what we're filtering for and what's available
+                console.log('Filtering for game mode:', `"${currentStandingsGameMode}"`);
+                console.log('Available game modes in data:', [...new Set(allData.map(row => `"${row.gameMode}"`))]);
+                
+                // Map user selection to actual data values
+                let actualGameMode = currentStandingsGameMode;
+                if (currentStandingsGameMode === 'Battle Royale') {
+                    actualGameMode = 'Battle Royale'; // Map to what's actually in the data
+                }
+                
+                // Use case-insensitive and trimmed comparison to handle variations
+                dataToUse = allData.filter(row => {
+                    const normalizedRowMode = row.gameMode?.toString().trim().toLowerCase() || '';
+                    const normalizedFilterMode = actualGameMode.toString().trim().toLowerCase();
+                    return normalizedRowMode === normalizedFilterMode;
+                });
+                
+                console.log('Mapped filter mode:', `"${actualGameMode}"`);
+                console.log('Filtered data length:', dataToUse.length);
+                console.log('Sample filtered records:', dataToUse.slice(0, 3).map(row => ({ 
+                    team: row.teamName, 
+                    mode: `"${row.gameMode}"`,
+                    points: row.totalPoints 
+                })));
+            }
+            
+            dataToUse.forEach(row => {
                 if (!teamStats[row.teamName]) {
                     teamStats[row.teamName] = { totalPoints: 0, games: 0, wins: 0, top5s: 0, totalElims: 0 };
                 }
@@ -594,10 +644,14 @@
                 teamStats[row.teamName].totalElims += row.totalEliminations;
             });
             
-            return Object.entries(teamStats)
+            const results = Object.entries(teamStats)
                 .map(([team, stats]) => ({ team, ...stats }))
                 .sort((a, b) => b.totalPoints - a.totalPoints)
                 .map((team, index) => ({ ...team, rank: index + 1, clinched: index < 80 }));
+                
+            console.log('Final standings results:', results.length, 'teams');
+            
+            return results;
         }
 
         function updateTop30Standings(top30) {
