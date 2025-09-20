@@ -1,17 +1,17 @@
 # KSEL Fortnite Team Analytics Dashboard
 
-A comprehensive web-based analytics dashboard for tracking KSEL (Kern Scholastic Esports League) Fortnite team performance throughout the competitive season.
+A comprehensive web-based analytics dashboard for tracking Kern Scholastic Esports League (KSEL) Fortnite team performance throughout the competitive season.
 
 ## Live Dashboard
 
-**Students and Coaches:** Access the leaderboard at: [[https://erikmadams.github.io/fortnite-dashboard](https://erikmadams.github.io/fortnite-dashboard/)]
+**Students and Coaches:** Access the leaderboard at: [[KSEL Fortnite Leaderboard](https://erikmadams.github.io/fortnite-dashboard/)]
 
 ## Features
 
 ### Season Standings
 - **Top 30 Teams Display** - Three-column layout showing current rankings
 - **Expandable Full Rankings** - View all teams with detailed statistics
-- **Playoff Tracking** - Visual indicators for teams that have clinched playoff spots (top 80)
+- **Playoff Tracking** - Visual indicators for teams that have clinched playoff spots
 - **Color-Coded Rankings** - Gold, silver, blue, and green badges for different performance tiers
 
 ### Team Performance Analytics
@@ -50,6 +50,7 @@ The dashboard tracks performance for all participating KSEL schools:
 - Golden Valley High School
 - Highland High School
 - Independence High School
+- Kern Valley High School
 - Liberty High School
 - Mira Monte High School
 - North High School
@@ -75,7 +76,6 @@ The dashboard uses the official KSEL Fortnite scoring system:
 - **6th - 9th Place**: 15 points
 - **10th - 18th Place**: 10 points
 - **19th - 25th Place**: 5 points
-- **26th+ Place**: 0 points
 
 ### Elimination Points
 - **4 points per elimination**
@@ -88,20 +88,6 @@ The dashboard uses the official KSEL Fortnite scoring system:
 - **Icons**: Lucide icons for UI elements
 - **Data Source**: Google Sheets integration
 - **Hosting**: GitHub Pages
-
-## Setup Instructions
-
-### For Administrators
-
-1. **Clone this repository**
-2. **Connect your Google Sheet**:
-   - Publish your results sheet as CSV
-   - Update the `SHEET_CSV_URL` variable in `index.html`
-   - Comment out sample data and uncomment real data functions
-3. **Deploy to GitHub Pages**:
-   - Enable Pages in repository settings
-   - Select source as "Deploy from a branch"
-   - Choose `main` branch and `/` (root) folder
 
 ### Data Integration
 
