@@ -140,15 +140,11 @@ For technical issues or questions about the dashboard:
 2. **Verify Data Connection**: Ensure Google Sheet is published and accessible
 3. **Clear Browser Cache**: Try a hard refresh (Ctrl+F5 or Cmd+Shift+R)
 
-## Contributing
+## Support
+For technical support or feature requests, contact the KSEL leadership team.
 
-This dashboard was created for the KSEL Fortnite competitive season. Suggestions for improvements or additional features can be submitted via GitHub issues.
+## Version History
+- v1.0: Initial release with basic bus scheduling and countdown timer
 
 ## License
-
-Created for educational use within the Kern Schools Esports League. 
-
----
-
-**Kern Scholastic Esports League**  
-*Tracking Victory Royales and Building Champions*
+Developed for Kern Scholastic Esports League by LeagueHQ developers.  For KSEL internal use only.
