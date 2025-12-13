@@ -154,17 +154,18 @@
                 console.log('Data rows:', dataRows.length);
                 
                 allData = dataRows.map(row => ({
-                    date: row[0] || '',
+                    timestamp: row[0] || '',
                     school: row[1] || '',
                     teamName: row[2] || '',
-                    gameMode: row[3] || '',
-                    teamPlacement: parseInt(row[4]) || 0,
-                    totalPoints: parseFloat(row[5]) || 0,
-                    totalEliminations: parseInt(row[6]) || 0,
+                    date: row[3] || '',
+                    gameMode: row[4] || '',
+                    teamPlacement: parseInt(row[5]) || 0,
+                    totalPoints: parseFloat(row[6]) || 0,
                     player1Name: row[7] || '',
-                    player1Placement: parseInt(row[8]) || 0,
-                    player2Name: row[9] || '',
-                    player2Placement: parseInt(row[10]) || 0
+                    player1Placement: 0, // Not in this format
+                    player2Name: row[16] || '',
+                    player2Placement: 0, // Not in this format
+                    totalEliminations: parseInt(row[42]) || 0
                 })).filter(row => row.teamName && row.teamName.trim() !== '');
 
                 console.log('Parsed data:', allData.length, 'valid rows');
