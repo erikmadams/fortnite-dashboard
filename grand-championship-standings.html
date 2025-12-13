@@ -110,37 +110,33 @@
         async function loadData() {
             console.log('=== LOADING DATA ===');
             try {
-                const SHEET_ID = '1H0ePv_hXKIRKmLqHHkwjXJTXXa0gW-B_YzXtPU-yGxE';
-                const RANGE = 'Match Results!A:K';
-                const API_KEY = 'AIzaSyDZ4PpMaY8pDvA3e7jJb_8l6mCnKhhk-C4';
-                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcsPlxJ-B0BnIK7mkPmwnWPJFkzWgoygfWsviMrzeBtrHtzfpzPiTI3alooIR9En0x/exec';
                 
-                console.log('Fetching from:', url);
-                const response = await fetch(url);
+                console.log('Fetching from:', SCRIPT_URL);
+                const response = await fetch(SCRIPT_URL);
                 const data = await response.json();
                 
                 console.log('Raw response:', data);
                 
-                if (!data.values) {
-                    console.error('No values in response');
+                if (!data || data.length === 0) {
+                    console.error('No data in response');
                     return;
                 }
 
-                const rows = data.values.slice(1);
-                console.log('Processing', rows.length, 'rows');
+                console.log('Processing', data.length, 'rows');
                 
-                allData = rows.map(row => ({
-                    date: row[0] || '',
-                    school: row[1] || '',
-                    teamName: row[2] || '',
-                    gameMode: row[3] || '',
-                    teamPlacement: parseInt(row[4]) || 0,
-                    totalPoints: parseFloat(row[5]) || 0,
-                    totalEliminations: parseInt(row[6]) || 0,
-                    player1Name: row[7] || '',
-                    player1Placement: parseInt(row[8]) || 0,
-                    player2Name: row[9] || '',
-                    player2Placement: parseInt(row[10]) || 0
+                allData = data.map(row => ({
+                    date: row.Date || '',
+                    school: row.School || '',
+                    teamName: row['Team Name'] || '',
+                    gameMode: row['Game Mode'] || '',
+                    teamPlacement: parseInt(row['Team Placement']) || 0,
+                    totalPoints: parseFloat(row['Total Points']) || 0,
+                    totalEliminations: parseInt(row['Total Eliminations']) || 0,
+                    player1Name: row['Player 1 Name'] || '',
+                    player1Placement: parseInt(row['Player 1 Placement']) || 0,
+                    player2Name: row['Player 2 Name'] || '',
+                    player2Placement: parseInt(row['Player 2 Placement']) || 0
                 })).filter(row => row.teamName);
 
                 console.log('Parsed data:', allData.length, 'valid rows');
