@@ -110,36 +110,68 @@
         async function loadData() {
             console.log('=== LOADING DATA ===');
             try {
-                const SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwcsPlxJ-B0BnIK7mkPmwnWPJFkzWgoygfWsviMrzeBtrHtzfpzPiTI3alooIR9En0x/exec';
+                const SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vS2WOF19jlQP7CuF1eG7rzVxEZybL6637Lo6lhZluKscRDl2VcIoMi_FPIkTM6PWeyXzLWDUc7amqO2/pub?output=csv';
                 
-                console.log('Fetching from:', SCRIPT_URL);
-                const response = await fetch(SCRIPT_URL);
-                const data = await response.json();
+                console.log('Fetching from:', SHEET_CSV_URL);
+                const response = await fetch(SHEET_CSV_URL);
+                const csvText = await response.text();
                 
-                console.log('Raw response:', data);
+                console.log('CSV received, length:', csvText.length);
                 
-                if (!data || data.length === 0) {
-                    console.error('No data in response');
-                    return;
-                }
-
-                console.log('Processing', data.length, 'rows');
+                // Parse CSV
+                const rows = csvText.split('\n').map(row => {
+                    // Simple CSV parser that handles quoted fields
+                    const values = [];
+                    let current = '';
+                    let inQuotes = false;
+                    
+                    for (let i = 0; i < row.length; i++) {
+                        const char = row[i];
+                        const nextChar = row[i + 1];
+                        
+                        if (char === '"') {
+                            if (inQuotes && nextChar === '"') {
+                                current += '"';
+                                i++;
+                            } else {
+                                inQuotes = !inQuotes;
+                            }
+                        } else if (char === ',' && !inQuotes) {
+                            values.push(current);
+                            current = '';
+                        } else {
+                            current += char;
+                        }
+                    }
+                    values.push(current);
+                    return values;
+                });
                 
-                allData = data.map(row => ({
-                    date: row.Date || '',
-                    school: row.School || '',
-                    teamName: row['Team Name'] || '',
-                    gameMode: row['Game Mode'] || '',
-                    teamPlacement: parseInt(row['Team Placement']) || 0,
-                    totalPoints: parseFloat(row['Total Points']) || 0,
-                    totalEliminations: parseInt(row['Total Eliminations']) || 0,
-                    player1Name: row['Player 1 Name'] || '',
-                    player1Placement: parseInt(row['Player 1 Placement']) || 0,
-                    player2Name: row['Player 2 Name'] || '',
-                    player2Placement: parseInt(row['Player 2 Placement']) || 0
-                })).filter(row => row.teamName);
+                console.log('Total rows:', rows.length);
+                
+                // Skip header row
+                const dataRows = rows.slice(1).filter(row => row.length > 1 && row[0]);
+                console.log('Data rows:', dataRows.length);
+                
+                allData = dataRows.map(row => ({
+                    date: row[0] || '',
+                    school: row[1] || '',
+                    teamName: row[2] || '',
+                    gameMode: row[3] || '',
+                    teamPlacement: parseInt(row[4]) || 0,
+                    totalPoints: parseFloat(row[5]) || 0,
+                    totalEliminations: parseInt(row[6]) || 0,
+                    player1Name: row[7] || '',
+                    player1Placement: parseInt(row[8]) || 0,
+                    player2Name: row[9] || '',
+                    player2Placement: parseInt(row[10]) || 0
+                })).filter(row => row.teamName && row.teamName.trim() !== '');
 
                 console.log('Parsed data:', allData.length, 'valid rows');
+                
+                if (allData.length > 0) {
+                    console.log('Sample row:', allData[0]);
+                }
                 
                 filteredData = [...allData];
                 
@@ -151,6 +183,7 @@
                 console.log('Initial load complete');
             } catch (error) {
                 console.error('Error loading data:', error);
+                console.error('Error stack:', error.stack);
             }
         }
 
