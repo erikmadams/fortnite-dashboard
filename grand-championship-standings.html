@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>KSEL Grand Championship Standings</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+</head>
+<body class="bg-gradient-to-br from-gray-50 to-gray-100 min-h-screen">
+    <div class="max-w-7xl mx-auto p-6">
+        <!-- Header -->
+        <div class="bg-white rounded-xl shadow-lg mb-6 p-6 border-l-4 border-red-500">
+            <div class="flex items-center justify-between mb-0 min-h-[72px]">
+                <div class="flex items-center">
+                    <img src="https://raw.githubusercontent.com/erikmadams/ksel-fortnite-results/main/KSEL_Header_Black_48x198.png" alt="KSEL Logo" style="height: 48px; width: 198px;" class="rounded" onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="flex items-center justify-center text-white font-bold rounded text-lg" style="background-color: #EE2A3E; height: 48px; width: 198px; display: none;">
+                        KSEL
+                    </div>
+                </div>
+                
+                <div class="flex-1 text-center">
+                    <h1 class="text-3xl font-bold text-gray-800">Grand Championship Standings</h1>
+                    <p class="text-gray-600">Live tournament rankings</p>
+                </div>
+                
+                <div class="flex gap-2">
+                    <button onclick="loadData()" class="text-white px-6 rounded-lg inline-flex items-center justify-center text-center gap-2 font-medium transition-colors hover:opacity-90 h-11" style="background-color: #EE2A3E">
+                        <i data-lucide="refresh-cw" class="w-4 h-4"></i>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Championship Standings -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <div class="flex items-center justify-between mb-6">
+                <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                    <i data-lucide="trophy" class="w-5 h-5 text-yellow-600"></i>
+                    Grand Championship Standings
+                </h2>
+                <div class="flex items-center gap-3">
+                    <!-- Game Mode Filter for Standings -->
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-700">Mode:</label>
+                        <select id="standingsGameModeFilter" onchange="updateStandingsForGameMode()" class="h-9 border border-gray-300 rounded-lg px-3 py-1 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm">
+                            <option value="Battle Royale">Battle Royale</option>
+                            <option value="Zero Build">Zero Build</option>
+                        </select>
+                    </div>
+                    
+                    <button 
+                        id="expandStandingsBtn"
+                        onclick="toggleStandings()"
+                        class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded-lg inline-flex items-center justify-center gap-2 font-medium transition-colors text-sm"
+                    >
+                        <i data-lucide="expand" class="w-4 h-4" id="expandIcon"></i>
+                        <span id="expandText">Show All Teams</span>
+                    </button>
+                </div>
+            </div>
+            
+            <div id="standingsContainer">
+                <div id="top30Standings" class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="col-span-3 text-center text-gray-500 py-8">
+                        Loading championship standings...
+                    </div>
+                </div>
+                
+                <div id="allStandings" style="display: none;" class="space-y-2">
+                    <!-- All teams will be populated here when expanded -->
+                </div>
+            </div>
+        </div>
+
+
+
+
+
+
+
+
+    </div>
+
+    <script>
+        let allData = [];
+        let filteredData = [];
+        let teamStandings = [];
+        let standingsExpanded = false;
+
+        // Initialize the page
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('DOM loaded, initializing...');
+            // Wait for Lucide to load before creating icons
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            } else {
+                console.log('Waiting for Lucide to load...');
+                setTimeout(() => {
+                    if (typeof lucide !== 'undefined') {
+                        lucide.createIcons();
+                    }
+                }, 100);
+            }
+            loadData();
+        });
+
+        async function loadData() {
+            console.log('=== LOADING DATA ===');
+            try {
+                const SHEET_ID = '1H0ePv_hXKIRKmLqHHkwjXJTXXa0gW-B_YzXtPU-yGxE';
+                const RANGE = 'Match Results!A:K';
+                const API_KEY = 'AIzaSyDZ4PpMaY8pDvA3e7jJb_8l6mCnKhhk-C4';
+                const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${RANGE}?key=${API_KEY}`;
+                
+                console.log('Fetching from:', url);
+                const response = await fetch(url);
+                const data = await response.json();
+                
+                console.log('Raw response:', data);
+                
+                if (!data.values) {
+                    console.error('No values in response');
+                    return;
+                }
+
+                const rows = data.values.slice(1);
+                console.log('Processing', rows.length, 'rows');
+                
+                allData = rows.map(row => ({
+                    date: row[0] || '',
+                    school: row[1] || '',
+                    teamName: row[2] || '',
+                    gameMode: row[3] || '',
+                    teamPlacement: parseInt(row[4]) || 0,
+                    totalPoints: parseFloat(row[5]) || 0,
+                    totalEliminations: parseInt(row[6]) || 0,
+                    player1Name: row[7] || '',
+                    player1Placement: parseInt(row[8]) || 0,
+                    player2Name: row[9] || '',
+                    player2Placement: parseInt(row[10]) || 0
+                })).filter(row => row.teamName);
+
+                console.log('Parsed data:', allData.length, 'valid rows');
+                
+                filteredData = [...allData];
+                
+                updateTeamStandings();
+                if (typeof lucide !== 'undefined') {
+                    lucide.createIcons();
+                }
+                
+                console.log('Initial load complete');
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function updateTeamStandings() {
+            console.log('=== UPDATING TEAM STANDINGS ===');
+            
+            const selectedMode = document.getElementById('standingsGameModeFilter').value;
+            console.log('Selected game mode:', selectedMode);
+            
+            const modeFilteredData = allData.filter(row => row.gameMode === selectedMode);
+            console.log('Filtered to', modeFilteredData.length, 'matches for', selectedMode);
+            
+            const teamGroups = {};
+            modeFilteredData.forEach(row => {
+                const key = `${row.school}|${row.teamName}`;
+                if (!teamGroups[key]) {
+                    teamGroups[key] = [];
+                }
+                teamGroups[key].push(row.totalPoints);
+            });
+            
+            console.log('Team groups created:', Object.keys(teamGroups).length);
+            
+            teamStandings = Object.entries(teamGroups).map(([key, scores]) => {
+                const [school, teamName] = key.split('|');
+                
+                // Sort scores descending and take top 3 out of 4 matches
+                const sortedScores = scores.sort((a, b) => b - a);
+                const top3Scores = sortedScores.slice(0, 3);
+                
+                // Calculate total of top 3 scores
+                const top3Total = top3Scores.reduce((sum, score) => sum + score, 0);
+                
+                return {
+                    school,
+                    teamName,
+                    matchCount: scores.length,
+                    top3Total: top3Total,
+                    allScores: sortedScores
+                };
+            });
+            
+            // Sort by top 3 total (descending)
+            teamStandings.sort((a, b) => b.top3Total - a.top3Total);
+            
+            console.log('Team standings calculated:', teamStandings.length, 'teams');
+            console.log('Top team:', teamStandings[0]);
+            
+            updateStandingsDisplay();
+        }
+
+        function updateStandingsForGameMode() {
+            console.log('Game mode filter changed');
+            updateTeamStandings();
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+        }
+
+        function updateStandingsDisplay() {
+            console.log('=== UPDATING STANDINGS DISPLAY ===');
+            
+            if (standingsExpanded) {
+                displayAllStandings();
+            } else {
+                displayTop30Standings();
+            }
+        }
+
+        function displayTop30Standings() {
+            console.log('Displaying top 30 standings');
+            
+            const top30 = teamStandings.slice(0, 30);
+            
+            const columns = [
+                top30.slice(0, 10),
+                top30.slice(10, 20),
+                top30.slice(20, 30)
+            ];
+            
+            document.getElementById('top30Standings').innerHTML = columns.map((column, colIndex) => `
+                <div class="space-y-2">
+                    ${column.map((team, index) => {
+                        const rank = colIndex * 10 + index + 1;
+                        const isTopTen = rank <= 10;
+                        
+                        return `
+                            <div class="p-4 rounded-lg border-2 ${isTopTen ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400' : 'bg-white border-gray-200'} hover:shadow-md transition-shadow">
+                                <div class="flex items-center justify-between mb-2">
+                                    <div class="flex items-center gap-3">
+                                        <div class="flex flex-col items-center">
+                                            <span class="text-2xl font-bold ${isTopTen ? 'text-yellow-600' : 'text-gray-400'}">#${rank}</span>
+                                        </div>
+                                        <div>
+                                            <div class="font-bold text-gray-800">${team.teamName}</div>
+                                            <div class="text-sm text-gray-600">${team.school}</div>
+                                        </div>
+                                    </div>
+                                    <div class="text-right">
+                                        <div class="text-2xl font-bold text-red-600">${team.top3Total.toFixed(1)}</div>
+                                        <div class="text-xs text-gray-500">${team.matchCount} matches</div>
+                                    </div>
+                                </div>
+                            </div>
+                        `;
+                    }).join('')}
+                </div>
+            `).join('');
+            
+            console.log('Top 30 standings displayed');
+        }
+
+        function displayAllStandings() {
+            console.log('Displaying all standings');
+            
+            document.getElementById('allStandings').innerHTML = teamStandings.map((team, index) => {
+                const rank = index + 1;
+                const isTopTen = rank <= 10;
+                
+                return `
+                    <div class="p-4 rounded-lg border-2 ${isTopTen ? 'bg-gradient-to-r from-yellow-50 to-yellow-100 border-yellow-400' : 'bg-white border-gray-200'} hover:shadow-md transition-shadow">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center gap-4">
+                                <span class="text-2xl font-bold ${isTopTen ? 'text-yellow-600' : 'text-gray-400'} min-w-[60px]">#${rank}</span>
+                                <div>
+                                    <div class="font-bold text-gray-800">${team.teamName}</div>
+                                    <div class="text-sm text-gray-600">${team.school}</div>
+                                </div>
+                            </div>
+                            <div class="text-right">
+                                <div class="text-2xl font-bold text-red-600">${team.top3Total.toFixed(1)}</div>
+                                <div class="text-xs text-gray-500">${team.matchCount} matches</div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+        }
+
+        function toggleStandings() {
+            console.log('=== TOGGLING STANDINGS VIEW ===');
+            standingsExpanded = !standingsExpanded;
+            
+            const top30Container = document.getElementById('top30Standings');
+            const allContainer = document.getElementById('allStandings');
+            const expandText = document.getElementById('expandText');
+            const expandIcon = document.getElementById('expandIcon');
+            
+            if (standingsExpanded) {
+                top30Container.style.display = 'none';
+                allContainer.style.display = 'block';
+                expandText.textContent = 'Show Top 30';
+                expandIcon.setAttribute('data-lucide', 'minimize');
+                displayAllStandings();
+            } else {
+                top30Container.style.display = 'grid';
+                allContainer.style.display = 'none';
+                expandText.textContent = 'Show All Teams';
+                expandIcon.setAttribute('data-lucide', 'expand');
+                displayTop30Standings();
+            }
+            
+            if (typeof lucide !== 'undefined') {
+                lucide.createIcons();
+            }
+            console.log('Standings view toggled. Expanded:', standingsExpanded);
+        }
+    </script>
+</body>
+</html>
