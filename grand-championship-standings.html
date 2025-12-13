@@ -212,24 +212,24 @@
             teamStandings = Object.entries(teamGroups).map(([key, scores]) => {
                 const [school, teamName] = key.split('|');
                 
-                // Sort scores descending and take top 3 out of 4 matches
+                // Sort scores descending and take top 2 out of 3 matches
                 const sortedScores = scores.sort((a, b) => b - a);
-                const top3Scores = sortedScores.slice(0, 3);
+                const top2Scores = sortedScores.slice(0, 2);
                 
-                // Calculate total of top 3 scores
-                const top3Total = top3Scores.reduce((sum, score) => sum + score, 0);
+                // Calculate total of top 2 scores
+                const top2Total = top2Scores.reduce((sum, score) => sum + score, 0);
                 
                 return {
                     school,
                     teamName,
                     matchCount: scores.length,
-                    top3Total: top3Total,
+                    top2Total: top2Total,
                     allScores: sortedScores
                 };
             });
             
-            // Sort by top 3 total (descending)
-            teamStandings.sort((a, b) => b.top3Total - a.top3Total);
+            // Sort by top 2 total (descending)
+            teamStandings.sort((a, b) => b.top2Total - a.top2Total);
             
             console.log('Team standings calculated:', teamStandings.length, 'teams');
             console.log('Top team:', teamStandings[0]);
@@ -285,7 +285,7 @@
                                         </div>
                                     </div>
                                     <div class="text-right">
-                                        <div class="text-2xl font-bold text-red-600">${team.top3Total.toFixed(1)}</div>
+                                        <div class="text-2xl font-bold text-red-600">${team.top2Total.toFixed(1)}</div>
                                         <div class="text-xs text-gray-500">${team.matchCount} matches</div>
                                     </div>
                                 </div>
@@ -316,7 +316,7 @@
                                 </div>
                             </div>
                             <div class="text-right">
-                                <div class="text-2xl font-bold text-red-600">${team.top3Total.toFixed(1)}</div>
+                                <div class="text-2xl font-bold text-red-600">${team.top2Total.toFixed(1)}</div>
                                 <div class="text-xs text-gray-500">${team.matchCount} matches</div>
                             </div>
                         </div>
