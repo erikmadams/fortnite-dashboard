@@ -171,6 +171,7 @@
                 
                 if (allData.length > 0) {
                     console.log('Sample row:', allData[0]);
+                    console.log('Unique game modes found:', [...new Set(allData.map(r => r.gameMode))]);
                 }
                 
                 filteredData = [...allData];
