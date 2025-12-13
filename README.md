@@ -2,9 +2,11 @@
 
 A comprehensive web-based analytics dashboard for tracking Kern Scholastic Esports League (KSEL) Fortnite team performance throughout the competitive season.
 
-## Live Dashboard
+## Live Dashboards
 
-**Students and Coaches:** Access the leaderboard at: [[KSEL Fortnite Leaderboard](https://erikmadams.github.io/fortnite-dashboard/)]
+**Students and Coaches:**
+- **Season Leaderboard**: [KSEL Fortnite Leaderboard](https://erikmadams.github.io/fortnite-dashboard/)
+- **Grand Championship Standings**: [KSEL Grand Championship](https://erikmadams.github.io/fortnite-dashboard/grand-championship-standings.html)
 
 ## Features
 
@@ -13,6 +15,13 @@ A comprehensive web-based analytics dashboard for tracking Kern Scholastic Espor
 - **Expandable Full Rankings** - View all teams with detailed statistics
 - **Playoff Tracking** - Visual indicators for teams that have clinched playoff spots
 - **Color-Coded Rankings** - Gold, silver, blue, and green badges for different performance tiers
+
+### Grand Championship Standings
+- **Championship Format** - Displays top 3 out of 4 match scores (total, not averaged)
+- **Game Mode Filtering** - Toggle between Battle Royale and Zero Build results
+- **Real-Time Rankings** - Live standings updated from match results
+- **Streamlined View** - Focused display for championship tournament tracking
+- **Top 30 Quick View** - Expandable to show all competing teams
 
 ### Team Performance Analytics
 - **Victory Royales** - Win count and win rate percentage
@@ -37,55 +46,37 @@ A comprehensive web-based analytics dashboard for tracking Kern Scholastic Espor
 The dashboard tracks performance for all participating KSEL schools:
 
 - Arvin High School
-- Bakersfield High School
 - Bakersfield Christian High School
+- Bakersfield High School
 - Centennial High School
-- Central Valley High School
-- Cesar Chavez High School
-- Del Oro High School
 - Delano High School
-- East High School
+- East Bakersfield High School
 - Foothill High School
 - Frontier High School
+- Garces Memorial High School
 - Golden Valley High School
 - Highland High School
 - Independence High School
 - Kern Valley High School
 - Liberty High School
+- McFarland High School
 - Mira Monte High School
 - North High School
 - Ridgeview High School
-- Robert F Kennedy High School
 - Shafter High School
 - South High School
 - Stockdale High School
-- Tierra Del Sol High School
-- Valley High School
-- Vista High School
-- Vista West High School
+- Taft High School
+- Tehachapi High School
+- Valley Home Education Academy
 - Wasco High School
 - West High School
 
-## Scoring System
+## Technical Stack
 
-The dashboard uses the official KSEL Fortnite scoring system:
-
-### Placement Points
-- **1st Place**: 25 points
-- **2nd - 5th Place**: 20 points
-- **6th - 9th Place**: 15 points
-- **10th - 18th Place**: 10 points
-- **19th - 25th Place**: 5 points
-
-### Elimination Points
-- **4 points per elimination**
-- **Maximum 50 points from eliminations**
-
-## Technology Stack
-
-- **Frontend**: HTML5, CSS3 (Tailwind), JavaScript
-- **Charts**: Chart.js for performance visualization
-- **Icons**: Lucide icons for UI elements
+- **Frontend**: HTML5, CSS3 (Tailwind CSS), JavaScript
+- **Charts**: Chart.js for data visualizations
+- **Icons**: Lucide Icons
 - **Data Source**: Google Sheets integration
 - **Hosting**: GitHub Pages
 
@@ -106,18 +97,35 @@ The dashboard connects to your existing Google Sheets data source. Match results
 
 ## Usage
 
+### Season Dashboard vs. Grand Championship
+
+**Season Dashboard** (`index.html`):
+- Tracks performance across the entire regular season
+- Uses average of top 5 scores out of all matches played
+- Shows comprehensive team statistics and trends
+- Includes playoff qualification tracking
+
+**Grand Championship** (`grand-championship-standings.html`):
+- Specifically designed for championship tournament format
+- Calculates standings using **top 3 out of 4 match scores**
+- Reports **total points** (not averaged) from best 3 matches
+- Streamlined interface focused on live tournament standings
+- Each game mode (Battle Royale / Zero Build) tracked separately
+
 ### For Coaches
 - Monitor team performance trends over time
 - Compare your team's statistics against other schools
 - Track playoff positioning throughout the season
 - Analyze game mode performance differences
 - Review recent match results and patterns
+- View championship standings during finals
 
 ### For Athletes
 - View individual and team achievement metrics
 - Track improvement in placement and elimination statistics
 - Compare performance against league averages
 - Monitor progress toward playoff qualification
+- Follow championship tournament progress in real-time
 
 ## Mobile Compatibility
 
@@ -132,6 +140,15 @@ The dashboard automatically reflects new data when:
 
 *Data typically updates within a few minutes of new entries*
 
+## Setup for Grand Championship
+
+When preparing for the Grand Championship tournament:
+
+1. **Archive Season Data**: Move all regular season data from the "Match Results" tab to a separate tab (e.g., "2025 FN Season Results")
+2. **Clear Match Results Tab**: Keep the tab name as "Match Results" but remove all data rows (keep headers)
+3. **Run 4 Championship Matches**: Enter results for all 4 championship matches using your normal results entry system
+4. **View Live Standings**: The Grand Championship page will automatically calculate and display top 3 out of 4 scores
+
 ## Support
 
 For technical issues or questions about the dashboard:
@@ -140,11 +157,13 @@ For technical issues or questions about the dashboard:
 2. **Verify Data Connection**: Ensure Google Sheet is published and accessible
 3. **Clear Browser Cache**: Try a hard refresh (Ctrl+F5 or Cmd+Shift+R)
 
-## Support
 For technical support or feature requests, contact the KSEL leadership team.
 
 ## Version History
-- v1.0: Initial release with basic bus scheduling and countdown timer
+
+- v2.0: Added Grand Championship standings with top 3 of 4 scoring format
+- v1.0: Initial release with season analytics dashboard
 
 ## License
-Developed for Kern Scholastic Esports League by LeagueHQ developers.  For KSEL internal use only.
+
+Developed for Kern Scholastic Esports League by LeagueHQ developers. For KSEL internal use only.
