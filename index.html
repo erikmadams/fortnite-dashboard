@@ -23,6 +23,7 @@
                 <div class="flex-1 text-center">
                     <h1 class="text-3xl font-bold text-gray-800">Team Analytics Dashboard</h1>
                     <p class="text-gray-600">Performance tracking and statistics</p>
+                    <p class="text-xs text-gray-500 mt-1 inline-flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i><span id="lastUpdated">Last updated: loading...</span></p>
                 </div>
                 
                 <div class="flex gap-2">
@@ -83,6 +84,45 @@
                 <div class="flex items-center gap-2 text-xs text-orange-700">
                     <i data-lucide="alert-circle" class="w-3 h-3 text-orange-600"></i>
                     <span>Teams with fewer than 5 matches are ranked by their current average but have not yet qualified</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Filters Panel -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
+            <h2 class="text-xl font-bold text-gray-800 mb-1 text-left flex items-center gap-2">
+                <i data-lucide="filter" class="w-5 h-5 text-red-600"></i>
+                Filter Options
+            </h2>
+            <p class="text-sm text-gray-500 mb-4">Filters apply to every section below.</p>
+            
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">School</label>
+                    <select id="schoolFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Schools</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Team</label>
+                    <select id="teamFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Teams</option>
+                    </select>
+                </div>
+                
+                <div>
+                    <label class="block text-sm font-medium text-gray-700 mb-2">Game Mode</label>
+                    <select id="gameModeFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
+                        <option value="">All Modes</option>
+                    </select>
+                </div>
+                
+                <div class="flex items-end">
+                    <button onclick="applyFilters()" class="text-white px-6 rounded-lg inline-flex items-center justify-center text-center gap-2 font-medium transition-colors hover:opacity-90 h-11 w-full" style="background-color: #EE2A3E">
+                        <i data-lucide="search" class="w-4 h-4"></i>
+                        Apply Filters
+                    </button>
                 </div>
             </div>
         </div>
@@ -153,41 +193,15 @@
             </div>
         </div>
 
-        <!-- Filters Panel -->
+        <!-- School Standings -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <h2 class="text-xl font-bold text-gray-800 mb-4 text-left flex items-center gap-2">
-                <i data-lucide="filter" class="w-5 h-5 text-red-600"></i>
-                Filter Options
+            <h2 class="text-xl font-bold text-gray-800 mb-1 text-left flex items-center gap-2">
+                <i data-lucide="school" class="w-5 h-5 text-red-600"></i>
+                School Standings
             </h2>
-            
-            <div class="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">School</label>
-                    <select id="schoolFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
-                        <option value="">All Schools</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Team</label>
-                    <select id="teamFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
-                        <option value="">All Teams</option>
-                    </select>
-                </div>
-                
-                <div>
-                    <label class="block text-sm font-medium text-gray-700 mb-2">Game Mode</label>
-                    <select id="gameModeFilter" class="h-11 w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-red-500 focus:border-red-500">
-                        <option value="">All Modes</option>
-                    </select>
-                </div>
-                
-                <div class="flex items-end">
-                    <button onclick="applyFilters()" class="text-white px-6 rounded-lg inline-flex items-center justify-center text-center gap-2 font-medium transition-colors hover:opacity-90 h-11 w-full" style="background-color: #EE2A3E">
-                        <i data-lucide="search" class="w-4 h-4"></i>
-                        Apply Filters
-                    </button>
-                </div>
+            <p class="text-sm text-gray-500 mb-4">Ranked by average points per match across all of a school's teams.</p>
+            <div id="schoolStandings">
+                <div class="text-gray-500 text-center py-4">Loading...</div>
             </div>
         </div>
 
@@ -443,6 +457,7 @@
             }
             
             console.log('Parsed', allData.length, 'valid game records');
+            updateLastUpdated();
         }
 
         function parseCSVLine(line) {
@@ -815,6 +830,7 @@
             updatePointsLeaderboard();
             updateElimsLeaderboard();
             updatePlayerLeaderboards();
+            updateSchoolStandings();
         }
 
         function updateTeamLeaderboard() {
@@ -1009,6 +1025,97 @@
                 document.getElementById('playerAccuracyLeaderboard').innerHTML =
                     `<div class="text-gray-500 text-center py-4 text-sm">No players with ${MIN_ACCURACY_MATCHES}+ matches of accuracy data yet</div>`;
             }
+        }
+
+        // ===== LAST UPDATED =====
+        function updateLastUpdated() {
+            const el = document.getElementById('lastUpdated');
+            let latest = null;
+            let latestRaw = '';
+            allData.forEach(row => {
+                const d = new Date(row.timestamp);
+                if (!isNaN(d) && (!latest || d > latest)) {
+                    latest = d;
+                    latestRaw = row.timestamp;
+                }
+            });
+            if (latest) {
+                el.textContent = 'Last updated: ' + latest.toLocaleString('en-US', {
+                    month: 'short', day: 'numeric', year: 'numeric',
+                    hour: 'numeric', minute: '2-digit'
+                });
+            } else {
+                el.textContent = 'Last updated: unknown';
+            }
+        }
+
+        // ===== SCHOOL STANDINGS =====
+        function updateSchoolStandings() {
+            const schools = {};
+            filteredData.forEach(row => {
+                const name = (row.school || '').trim();
+                if (!name) return;
+                if (!schools[name]) {
+                    schools[name] = { school: name, teams: new Set(), games: 0, points: 0, wins: 0, top5s: 0, elims: 0 };
+                }
+                const s = schools[name];
+                s.teams.add(row.teamName);
+                s.games++;
+                s.points += row.totalPoints;
+                s.elims += row.totalEliminations;
+                if (row.teamPlacement === 1) s.wins++;
+                if (row.teamPlacement <= 5) s.top5s++;
+            });
+
+            const standings = Object.values(schools)
+                .map(s => ({ ...s, teamCount: s.teams.size, avgPoints: s.points / s.games }))
+                .sort((a, b) => b.avgPoints - a.avgPoints || b.points - a.points);
+
+            const container = document.getElementById('schoolStandings');
+            if (standings.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-center py-4 text-sm">No school data for the current filters</div>';
+                return;
+            }
+
+            const badge = rank => rank === 1 ? 'bg-yellow-500 text-white'
+                : rank === 2 ? 'bg-gray-400 text-white'
+                : rank === 3 ? 'bg-amber-700 text-white'
+                : 'bg-gray-100 text-gray-700';
+
+            container.innerHTML = `
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead class="bg-gray-50">
+                            <tr>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-700 w-12">Rank</th>
+                                <th class="px-3 py-3 text-left text-xs font-medium text-gray-700">School</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Avg Pts / Match</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Total Points</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Teams</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Matches</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Wins</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Top 5</th>
+                                <th class="px-2 py-3 text-center text-xs font-medium text-gray-700">Eliminations</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-gray-200">
+                            ${standings.map((s, i) => `
+                                <tr class="hover:bg-gray-50">
+                                    <td class="px-3 py-3"><span class="w-7 h-7 rounded-full ${badge(i + 1)} text-xs font-bold flex items-center justify-center">${i + 1}</span></td>
+                                    <td class="px-3 py-3 text-sm font-medium text-gray-800">${escapeHtml(s.school)}</td>
+                                    <td class="px-2 py-3 text-sm text-center font-bold text-blue-700">${s.avgPoints.toFixed(1)}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${s.points.toLocaleString()}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${s.teamCount}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${s.games}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${s.wins}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${s.top5s}</td>
+                                    <td class="px-2 py-3 text-sm text-center">${s.elims.toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+            `;
         }
 
         function updateRecentGames() {
