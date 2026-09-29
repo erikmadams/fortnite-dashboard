@@ -640,14 +640,19 @@
             // Build team stats with all scores for each team
             dataToUse.forEach(row => {
                 if (!teamStats[row.teamName]) {
-                    teamStats[row.teamName] = { 
-                        totalPoints: 0, 
+                    teamStats[row.teamName] = {
+                        school: row.school || '',
+                        totalPoints: 0,
                         games: 0, 
                         wins: 0, 
                         top5s: 0, 
                         totalElims: 0,
                         allScores: [] // Track all scores for top 5 calculation
                     };
+                }
+                // Fill in school if an earlier row for this team left it blank
+                if (!teamStats[row.teamName].school && row.school) {
+                    teamStats[row.teamName].school = row.school;
                 }
                 teamStats[row.teamName].totalPoints += row.totalPoints;
                 teamStats[row.teamName].games++;
@@ -667,7 +672,8 @@
                     const isQualified = stats.games >= 5;
                     
                     return { 
-                        team, 
+                        team,
+                        school: stats.school,
                         qualificationScore: Math.round(qualificationScore * 10) / 10, // Round to 1 decimal
                         totalPoints: stats.totalPoints,
                         games: stats.games,
@@ -703,6 +709,7 @@
                                 </span>
                                 <div class="flex flex-col">
                                     <span class="font-medium text-gray-800 text-sm">${team.team}</span>
+                                    ${team.school ? `<span class="text-xs text-gray-500">${team.school}</span>` : ''}
                                     ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified</span>' : ''}
                                 </div>
                             </div>
@@ -725,7 +732,7 @@
                 <div class="flex items-center justify-between p-2 bg-gray-100 border-b-2 border-gray-200 font-semibold text-sm text-gray-700">
                     <div class="flex items-center gap-3">
                         <span class="w-8 h-6 flex items-center justify-center">Rank</span>
-                        <span>Team Name</span>
+                        <span>Team / School</span>
                     </div>
                     <div class="flex items-center text-xs">
                         <span class="font-semibold w-24 text-center">Qual. Score</span>
@@ -746,6 +753,7 @@
                                 </span>
                                 <div class="flex flex-col">
                                     <span class="font-medium text-gray-800">${team.team}</span>
+                                    ${team.school ? `<span class="text-xs text-gray-500">${team.school}</span>` : ''}
                                     ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified (needs 5 games)</span>' : ''}
                                 </div>
                             </div>
