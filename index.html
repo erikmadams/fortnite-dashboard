@@ -120,6 +120,39 @@
             </div>
         </div>
 
+        <!-- Player Leaderboards Grid -->
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="swords" class="w-5 h-5 text-red-500"></i>
+                    Top Players (Eliminations)
+                </h3>
+                <div id="playerElimsLeaderboard" class="space-y-2">
+                    <div class="text-gray-500 text-center py-4">Loading...</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="flame" class="w-5 h-5 text-orange-500"></i>
+                    Top Players (Total Damage)
+                </h3>
+                <div id="playerDamageLeaderboard" class="space-y-2">
+                    <div class="text-gray-500 text-center py-4">Loading...</div>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-xl shadow-lg p-6">
+                <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <i data-lucide="crosshair" class="w-5 h-5 text-green-600"></i>
+                    Top Players (Accuracy)
+                </h3>
+                <div id="playerAccuracyLeaderboard" class="space-y-2">
+                    <div class="text-gray-500 text-center py-4">Loading...</div>
+                </div>
+            </div>
+        </div>
+
         <!-- Filters Panel -->
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
             <h2 class="text-xl font-bold text-gray-800 mb-4 text-left flex items-center gap-2">
@@ -781,6 +814,7 @@
             updateTeamLeaderboard();
             updatePointsLeaderboard();
             updateElimsLeaderboard();
+            updatePlayerLeaderboards();
         }
 
         function updateTeamLeaderboard() {
@@ -859,6 +893,122 @@
                     <span class="font-bold text-red-600">${item.avgElims}</span>
                 </div>
             `).join('');
+        }
+
+        // ===== PLAYER LEADERBOARDS =====
+        // Players must have accuracy recorded in at least this many matches to rank for accuracy
+        const MIN_ACCURACY_MATCHES = 3;
+
+        function escapeHtml(text) {
+            return String(text ?? '').replace(/[&<>"']/g, c => ({
+                '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+            }[c]));
+        }
+
+        // Accepts accuracy entered as 0.35, 35, or 35%
+        function normalizeAccuracy(value) {
+            if (!value || value <= 0) return 0;
+            return value <= 1 ? value * 100 : value;
+        }
+
+        function calculatePlayerStats() {
+            const players = {};
+
+            filteredData.forEach(row => {
+                [1, 2, 3, 4].forEach(n => {
+                    const tag = (row[`p${n}Tag`] || '').trim();
+                    if (!tag) return;
+
+                    const key = tag.toLowerCase();
+                    if (!players[key]) {
+                        players[key] = {
+                            tag,
+                            team: row.teamName,
+                            school: row.school,
+                            games: 0,
+                            elims: 0,
+                            damage: 0,
+                            accuracyTotal: 0,
+                            accuracyGames: 0
+                        };
+                    }
+
+                    const p = players[key];
+                    p.games++;
+                    p.elims += row[`p${n}Elims`] || 0;
+                    p.damage += row[`p${n}Damage`] || 0;
+
+                    const acc = normalizeAccuracy(row[`p${n}Accuracy`]);
+                    if (acc > 0) {
+                        p.accuracyTotal += acc;
+                        p.accuracyGames++;
+                    }
+                });
+            });
+
+            return Object.values(players).map(p => ({
+                ...p,
+                avgAccuracy: p.accuracyGames ? p.accuracyTotal / p.accuracyGames : 0
+            }));
+        }
+
+        function renderPlayerLeaderboard(containerId, rows, badgeClasses, valueClass, formatValue, subText) {
+            const container = document.getElementById(containerId);
+            if (rows.length === 0) {
+                container.innerHTML = '<div class="text-gray-500 text-center py-4 text-sm">No player data yet</div>';
+                return;
+            }
+            container.innerHTML = rows.map((p, index) => `
+                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="w-6 h-6 shrink-0 rounded-full ${badgeClasses} text-sm font-bold flex items-center justify-center">${index + 1}</span>
+                        <div class="flex flex-col min-w-0">
+                            <span class="font-medium text-gray-800 truncate">${escapeHtml(p.tag)}</span>
+                            <span class="text-xs text-gray-500 truncate">${escapeHtml(p.team)}${p.school ? ' · ' + escapeHtml(p.school) : ''}</span>
+                        </div>
+                    </div>
+                    <div class="text-right shrink-0 pl-2">
+                        <div class="font-bold ${valueClass}">${formatValue(p)}</div>
+                        <div class="text-xs text-gray-500">${subText(p)}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        function updatePlayerLeaderboards() {
+            const players = calculatePlayerStats();
+
+            const byElims = [...players]
+                .filter(p => p.elims > 0)
+                .sort((a, b) => b.elims - a.elims)
+                .slice(0, 5);
+            renderPlayerLeaderboard('playerElimsLeaderboard', byElims,
+                'bg-red-100 text-red-800', 'text-red-600',
+                p => p.elims.toLocaleString(),
+                p => `${p.games} games`);
+
+            const byDamage = [...players]
+                .filter(p => p.damage > 0)
+                .sort((a, b) => b.damage - a.damage)
+                .slice(0, 5);
+            renderPlayerLeaderboard('playerDamageLeaderboard', byDamage,
+                'bg-orange-100 text-orange-800', 'text-orange-600',
+                p => p.damage.toLocaleString(),
+                p => `${p.games} games`);
+
+            const byAccuracy = [...players]
+                .filter(p => p.accuracyGames >= MIN_ACCURACY_MATCHES)
+                .sort((a, b) => b.avgAccuracy - a.avgAccuracy)
+                .slice(0, 5);
+            renderPlayerLeaderboard('playerAccuracyLeaderboard', byAccuracy,
+                'bg-green-100 text-green-800', 'text-green-600',
+                p => `${p.avgAccuracy.toFixed(1)}%`,
+                p => `${p.accuracyGames} games`);
+
+            if (byAccuracy.length === 0 && players.length > 0) {
+                document.getElementById('playerAccuracyLeaderboard').innerHTML =
+                    `<div class="text-gray-500 text-center py-4 text-sm">No players with ${MIN_ACCURACY_MATCHES}+ matches of accuracy data yet</div>`;
+            }
         }
 
         function updateRecentGames() {
