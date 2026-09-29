@@ -434,39 +434,6 @@
             return values;
         }
 
-        function extractSchoolFromTeamName(teamName) {
-            if (!teamName) return '';
-            
-            // Handle common team name patterns
-            // "School Name TeamSuffix" -> "School Name"
-            const words = teamName.split(' ');
-            if (words.length <= 1) return teamName;
-            
-            // Remove common team suffixes
-            const suffixes = ['Eagles', 'Warriors', 'Lions', 'Panthers', 'Storm', 'Tigers', 'Wildcats', 'Hawks', 'Bears'];
-            const lastWord = words[words.length - 1];
-            
-            if (suffixes.includes(lastWord)) {
-                return words.slice(0, -1).join(' ');
-            }
-            
-            // If no recognized suffix, assume the last word is the team name
-            return words.slice(0, -1).join(' ') || teamName;
-        }
-
-        function getPlacementPoints(placement) {
-            if (placement === 1) return 25;
-            if (placement >= 2 && placement <= 5) return 20;
-            if (placement >= 6 && placement <= 9) return 15;
-            if (placement >= 10 && placement <= 18) return 10;
-            if (placement >= 19 && placement <= 25) return 5;
-            return 0;
-        }
-
-        function getEliminationPoints(eliminations) {
-            return Math.min(eliminations * 4, 50);
-        }
-
         function populateFilters() {
             console.log('Populating filters...');
             const schools = [...new Set(allData.map(row => row.school))];
@@ -504,8 +471,8 @@
             });
             
             // Add event listeners for cascading dropdowns
-            schoolFilter.addEventListener('change', onSchoolFilterChange);
-            teamFilter.addEventListener('change', onTeamFilterChange);
+            schoolFilter.onchange = onSchoolFilterChange;
+            teamFilter.onchange = onTeamFilterChange;
             
             console.log('Filters populated:', schools.length, 'schools,', teams.length, 'teams,', modes.length, 'modes');
         }
@@ -818,7 +785,7 @@
 
         function updateTeamLeaderboard() {
             const teamStats = {};
-            allData.forEach(row => {
+            filteredData.forEach(row => {
                 if (!teamStats[row.teamName]) teamStats[row.teamName] = { placements: [] };
                 teamStats[row.teamName].placements.push(row.teamPlacement);
             });
@@ -844,7 +811,7 @@
 
         function updatePointsLeaderboard() {
             const teamStats = {};
-            allData.forEach(row => {
+            filteredData.forEach(row => {
                 if (!teamStats[row.teamName]) teamStats[row.teamName] = { points: [] };
                 teamStats[row.teamName].points.push(row.totalPoints);
             });
@@ -870,7 +837,7 @@
 
         function updateElimsLeaderboard() {
             const teamStats = {};
-            allData.forEach(row => {
+            filteredData.forEach(row => {
                 if (!teamStats[row.teamName]) teamStats[row.teamName] = { elims: [] };
                 teamStats[row.teamName].elims.push(row.totalEliminations);
             });
@@ -896,7 +863,7 @@
 
         function updateRecentGames() {
             console.log('=== UPDATING RECENT GAMES ===');
-            const recent = allData.sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
+            const recent = [...filteredData].sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
             console.log('Recent games:', recent.length);
             
             document.getElementById('recentGames').innerHTML = `
@@ -938,7 +905,7 @@
                 window.performanceChart.destroy();
             }
             
-            const chartData = allData
+            const chartData = [...filteredData]
                 .sort((a, b) => new Date(a.date) - new Date(b.date))
                 .slice(-20);
             
@@ -1035,6 +1002,7 @@
             
             console.log('Filtered to', filteredData.length, 'games');
             
+            updateLeaderboards();
             updateTeamStats();
             updateRecentGames();
             updateChart();
