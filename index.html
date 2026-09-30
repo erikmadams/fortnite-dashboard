@@ -64,8 +64,8 @@
             </div>
             
             <div id="standingsContainer">
-                <div id="top30Standings" class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                    <div class="col-span-3 text-center text-gray-500 py-8">
+                <div id="top30Standings" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-4">
+                    <div class="col-span-full text-center text-gray-500 py-8">
                         Loading team standings...
                     </div>
                 </div>
@@ -79,11 +79,11 @@
                 <div class="flex items-center gap-2 text-sm mb-2">
                     <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
                     <span class="font-medium text-blue-800">Finals Qualification:</span>
-                    <span class="text-blue-700">Teams must play at least 4 matches. Top 25 qualified teams (by avg of their best 4 scores) make the Finals</span>
+                    <span class="text-blue-700">Duos must play at least 4 matches. The top 50 qualified duos in each mode (Battle Royale and Zero Build), by avg of their best 4 scores, make the Finals</span>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-orange-700">
                     <i data-lucide="alert-circle" class="w-3 h-3 text-orange-600"></i>
-                    <span>Teams with fewer than 4 matches are ranked by their current average but have not yet qualified</span>
+                    <span>Duos with fewer than 4 matches are ranked by their current average but have not yet qualified</span>
                 </div>
             </div>
         </div>
@@ -289,6 +289,10 @@
 
         // Finals qualification: average of a team's best N scores; must play at least N matches
         const QUALIFYING_MATCHES = 4;
+        // Number of qualified teams per game mode that advance to the Finals
+        const FINALS_SPOTS = 50;
+        // How many ranks the collapsed standings view shows (in columns of 10)
+        const PREVIEW_RANKS = 50;
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded');
@@ -443,14 +447,6 @@
                     p2Elims: parseInt(row['P2 Elims']) || 0,
                     p2Damage: parseInt(row['P2 Damage']) || 0,
                     p2Accuracy: parseFloat(row['P2 Accuracy']) || 0,
-                    p3Tag: row['P3 Tag'] || '',
-                    p3Elims: parseInt(row['P3 Elims']) || 0,
-                    p3Damage: parseInt(row['P3 Damage']) || 0,
-                    p3Accuracy: parseFloat(row['P3 Accuracy']) || 0,
-                    p4Tag: row['P4 Tag'] || '',
-                    p4Elims: parseInt(row['P4 Elims']) || 0,
-                    p4Damage: parseInt(row['P4 Damage']) || 0,
-                    p4Accuracy: parseFloat(row['P4 Accuracy']) || 0,
                     totalEliminations: parseInt(row['Total Eliminations']) || 0
                 };
                 
@@ -618,7 +614,7 @@
             console.log('=== UPDATING STANDINGS ===');
             const standings = calculateTeamStandings();
             console.log('Calculated', standings.length, 'team standings for mode:', currentStandingsGameMode || 'All Modes');
-            updateTop30Standings(standings.slice(0, 30));
+            updateTop30Standings(standings.slice(0, PREVIEW_RANKS));
             updateAllStandings(standings);
         }
 
@@ -702,36 +698,53 @@
                     };
                 })
                 .sort((a, b) => b.qualificationScore - a.qualificationScore) // Sort by qualification score
-                .map((team, index) => ({ ...team, rank: index + 1, clinched: index < 25 && team.isQualified }));
+                .map((team, index) => ({ ...team, rank: index + 1 }));
+
+            // Top FINALS_SPOTS teams among those that have played enough matches make the Finals
+            let finalsCount = 0;
+            results.forEach(team => {
+                team.makesFinals = team.isQualified && finalsCount < FINALS_SPOTS;
+                if (team.makesFinals) finalsCount++;
+            });
                 
             console.log('Final standings results:', results.length, 'teams');
             
             return results;
         }
 
-        function updateTop30Standings(top30) {
-            console.log('Updating top 30 standings with', top30.length, 'teams');
-            const columns = [top30.slice(0, 10), top30.slice(10, 20), top30.slice(20, 30)];
-            
+        function updateTop30Standings(topTeams) {
+            console.log('Updating standings preview with', topTeams.length, 'teams');
             const container = document.getElementById('top30Standings');
+
+            if (topTeams.length === 0) {
+                container.innerHTML = '<div class="col-span-full text-center text-gray-500 py-8">No results for this mode yet</div>';
+                return;
+            }
+
+            // Split into columns of 10: Top 10, Ranks 11-20, 21-30, ...
+            const columns = [];
+            for (let i = 0; i < topTeams.length; i += 10) {
+                columns.push(topTeams.slice(i, i + 10));
+            }
+
             container.innerHTML = columns.map((column, colIndex) => `
-                <div class="space-y-2">
+                <div class="space-y-2 min-w-0">
                     <h4 class="text-sm font-semibold text-gray-600 mb-3 text-center">
-                        ${colIndex === 0 ? 'Top 10' : colIndex === 1 ? 'Ranks 11-20' : 'Ranks 21-30'}
+                        ${colIndex === 0 ? 'Top 10' : `Ranks ${colIndex * 10 + 1}-${colIndex * 10 + 10}`}
                     </h4>
                     ${column.map(team => `
-                        <div class="flex items-center justify-between p-3 rounded-lg transition-colors ${getRankingStyling(team.rank, team.isQualified)}">
-                            <div class="flex items-center gap-3">
-                                <span class="w-6 h-6 rounded-full ${getRankBadgeColor(team.rank)} text-white text-xs font-bold flex items-center justify-center">
+                        <div class="flex items-center justify-between gap-2 p-2 rounded-lg transition-colors ${getRankingStyling(team)}">
+                            <div class="flex items-center gap-2 min-w-0">
+                                <span class="w-6 h-6 shrink-0 rounded-full ${getRankBadgeColor(team)} text-white text-xs font-bold flex items-center justify-center">
                                     ${team.rank}
                                 </span>
-                                <div class="flex flex-col">
-                                    <span class="font-medium text-gray-800 text-sm">${team.team}</span>
-                                    ${team.school ? `<span class="text-xs text-gray-500">${team.school}</span>` : ''}
+                                <div class="flex flex-col min-w-0">
+                                    <span class="font-medium text-gray-800 text-sm truncate" title="${escapeHtml(team.team)}">${escapeHtml(team.team)}</span>
+                                    ${team.school ? `<span class="text-xs text-gray-500 truncate" title="${escapeHtml(team.school)}">${escapeHtml(team.school)}</span>` : ''}
                                     ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified</span>' : ''}
                                 </div>
                             </div>
-                            <div class="text-right">
+                            <div class="text-right shrink-0">
                                 <div class="font-bold text-gray-900 text-sm">${team.qualificationScore}</div>
                                 <div class="text-xs text-gray-500">${team.games} games</div>
                             </div>
@@ -739,7 +752,7 @@
                     `).join('')}
                 </div>
             `).join('');
-            
+
             lucide.createIcons();
         }
 
@@ -763,10 +776,16 @@
                 </div>
                 
                 <div class="space-y-1">
-                    ${standings.map(team => `
+                    ${standings.map((team, i) => `
+                        ${!team.makesFinals && standings.slice(0, i).some(t => t.makesFinals) && !standings.slice(0, i).some(t => !t.makesFinals && t.isQualified) && team.isQualified ? `
+                        <div class="flex items-center gap-2 py-2 text-xs font-semibold text-red-600">
+                            <div class="flex-1 border-t-2 border-dashed border-red-300"></div>
+                            FINALS CUTOFF (Top ${FINALS_SPOTS})
+                            <div class="flex-1 border-t-2 border-dashed border-red-300"></div>
+                        </div>` : ''}
                         <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors ${!team.isQualified ? 'bg-orange-50' : ''}">
                             <div class="flex items-center gap-3">
-                                <span class="w-8 h-6 rounded ${getRankBadgeColor(team.rank)} text-white text-xs font-bold flex items-center justify-center">
+                                <span class="w-8 h-6 rounded ${getRankBadgeColor(team)} text-white text-xs font-bold flex items-center justify-center">
                                     ${team.rank}
                                 </span>
                                 <div class="flex flex-col">
@@ -789,18 +808,17 @@
             `;
         }
 
-        function getRankingStyling(rank, isQualified) {
+        function getRankingStyling(team) {
             // Highlight unqualified teams with orange background
-            if (!isQualified) return 'bg-orange-50 border border-orange-300';
-            
-            if (rank === 1) return 'bg-gradient-to-r from-yellow-100 to-yellow-200 border border-yellow-300';
-            if (rank <= 25) return 'bg-blue-50 border border-blue-200';
+            if (!team.isQualified) return 'bg-orange-50 border border-orange-300';
+            if (team.rank === 1) return 'bg-gradient-to-r from-yellow-100 to-yellow-200 border border-yellow-300';
+            if (team.makesFinals) return 'bg-blue-50 border border-blue-200';
             return 'bg-gray-50 border border-gray-200';
         }
 
-        function getRankBadgeColor(rank) {
-            if (rank === 1) return 'bg-yellow-600';
-            if (rank <= 25) return 'bg-blue-600';
+        function getRankBadgeColor(team) {
+            if (team.rank === 1) return 'bg-yellow-600';
+            if (team.makesFinals) return 'bg-blue-600';
             return 'bg-gray-500';
         }
 
@@ -815,7 +833,7 @@
             if (isStandingsExpanded) {
                 top30Container.style.display = 'none';
                 allContainer.style.display = 'block';
-                expandText.textContent = 'Show Top 30';
+                expandText.textContent = `Show Top ${PREVIEW_RANKS}`;
                 expandIcon.setAttribute('data-lucide', 'compress');
             } else {
                 top30Container.style.display = 'grid';
@@ -934,7 +952,7 @@
             const players = {};
 
             filteredData.forEach(row => {
-                [1, 2, 3, 4].forEach(n => {
+                [1, 2].forEach(n => { // Duos: two players per team
                     const tag = (row[`p${n}Tag`] || '').trim();
                     if (!tag) return;
 
