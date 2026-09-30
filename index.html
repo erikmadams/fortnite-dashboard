@@ -818,7 +818,17 @@
         }
 
         // ===== SCHOOL CUP =====
+        // During the regular season the Cup is PROJECTED: duos score by their current rank in the
+        // standings (top FINALS_SPOTS), even if they haven't played QUALIFYING_MATCHES yet.
+        // From the Finals date on (or once Finals results exist), only official Finals qualifiers score.
+        function isCupProjected() {
+            const today = new Date();
+            const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+            return !allData.some(r => r.isFinals) && todayDate < FINALS_DATE;
+        }
+
         function calculateSchoolCup() {
+            const projected = isCupProjected();
             const schools = {};
             const getSchool = name => {
                 if (!schools[name]) {
@@ -859,12 +869,16 @@
                 // List every school that has played, even with 0 points
                 regular.concat(finals).forEach(t => { if (t.school) getSchool(t.school); });
 
+                // Projected: current top FINALS_SPOTS ranks. Official: Finals seeds of qualified duos.
                 const regularEntries = regular
-                    .filter(t => t.makesFinals && t.school)
-                    .map(t => ({
-                        school: t.school, team: t.team, mode, stage: 'Regular Season',
-                        place: t.finalsSeed, points: FINALS_SPOTS + 1 - t.finalsSeed
-                    }));
+                    .filter(t => t.school && (projected ? t.rank <= FINALS_SPOTS : t.makesFinals))
+                    .map(t => {
+                        const place = projected ? t.rank : t.finalsSeed;
+                        return {
+                            school: t.school, team: t.team, mode, stage: 'Regular Season',
+                            place, points: FINALS_SPOTS + 1 - place, provisional: projected && !t.isQualified
+                        };
+                    });
                 regularEntries.forEach(e => getSchool(e.school).finalsBerths++);
                 scoreGroup(regularEntries, mode);
 
@@ -899,15 +913,19 @@
         function updateSchoolCup() {
             const cup = calculateSchoolCup();
             const hasFinals = allData.some(r => r.isFinals);
+            const projected = isCupProjected();
 
             // Stage badge
             const stage = document.getElementById('cupStage');
-            stage.textContent = hasFinals ? `Finals results included · ${formatFinalsDate()}` : `Regular Season · Finals ${formatFinalsDate()}`;
-            stage.className = 'text-xs font-semibold px-3 py-1 rounded-full ' + (hasFinals ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800');
+            stage.textContent = hasFinals ? `Finals results included · ${formatFinalsDate()}`
+                : projected ? `Projected · Regular season in progress · Finals ${formatFinalsDate()}`
+                : `Regular season final · Finals ${formatFinalsDate()}`;
+            stage.className = 'text-xs font-semibold px-3 py-1 rounded-full ' + (hasFinals ? 'bg-yellow-100 text-yellow-800' : projected ? 'bg-purple-100 text-purple-800' : 'bg-blue-100 text-blue-800');
 
             // Rules (built from the settings so they always match the math)
             document.getElementById('cupRules').innerHTML = `
                 <li><b>Regular season:</b> each duo that makes the Finals earns points by its Finals seed in its mode: 1st seed = ${FINALS_SPOTS} pts, ${FINALS_SPOTS}th seed = 1 pt.</li>
+                <li><b>Projected tally:</b> until the regular season ends, every duo currently ranked in the top ${FINALS_SPOTS} of its mode scores by its current rank, even before playing ${QUALIFYING_MATCHES} matches (marked <i>provisional</i>). Points lock in to official Finals seeds on ${formatFinalsDate()}.</li>
                 <li><b>Finals (${formatFinalsDate()}):</b> each duo earns points by Finals placement (best ${FINALS_COUNTING_MATCHES} matches added together), worth ${FINALS_CUP_MULTIPLIER}×: 1st = ${formatCupPoints(FINALS_SPOTS * FINALS_CUP_MULTIPLIER)} pts.</li>
                 <li><b>Depth:</b> only a school's best ${CUP_DUOS_PER_MODE} duos per mode count, for both the regular season and the Finals, so a school can't win just by entering the most teams.</li>
                 <li><b>Eligibility:</b> a school needs at least one duo in the Finals (either mode) to win the trophy.</li>
@@ -916,7 +934,7 @@
             const eligible = cup.filter(s => s.eligible);
             const leaderEl = document.getElementById('schoolCupLeader');
             if (eligible.length === 0) {
-                leaderEl.innerHTML = '<div class="p-4 rounded-lg bg-gray-50 text-gray-500 text-sm text-center">No school has a duo in Finals position yet</div>';
+                leaderEl.innerHTML = '<div class="p-4 rounded-lg bg-gray-50 text-gray-500 text-sm text-center">No regular-season results yet</div>';
             } else {
                 const leader = eligible[0];
                 const lead = eligible[1] ? leader.total - eligible[1].total : null;
@@ -927,7 +945,7 @@
                                 <i data-lucide="trophy" class="w-6 h-6"></i>
                             </div>
                             <div>
-                                <div class="text-xs font-semibold text-yellow-800 uppercase tracking-wide">${hasFinals ? 'Cup Leader' : 'Current Cup Leader'}</div>
+                                <div class="text-xs font-semibold text-yellow-800 uppercase tracking-wide">${hasFinals ? 'Cup Leader' : projected ? 'Projected Cup Leader' : 'Current Cup Leader'}</div>
                                 <div class="text-2xl font-bold text-gray-900">${escapeHtml(leader.school)}</div>
                             </div>
                         </div>
@@ -950,7 +968,7 @@
                 if (items.length === 0) return '<div class="text-xs text-gray-400">None</div>';
                 return items.map(e => `
                     <div class="flex justify-between gap-2 text-xs ${e.counted ? 'text-gray-800' : 'text-gray-400'}">
-                        <span class="truncate">${escapeHtml(e.team)} <span class="text-gray-500">(${e.stage === 'Finals' ? 'Finals #' : 'Seed #'}${e.place})</span></span>
+                        <span class="truncate">${escapeHtml(e.team)} <span class="text-gray-500">(${e.stage === 'Finals' ? 'Finals #' : projected ? 'Rank #' : 'Seed #'}${e.place}${e.provisional ? ', provisional' : ''})</span></span>
                         <span class="shrink-0 font-medium">${e.counted ? formatCupPoints(e.points) : 'not counted'}</span>
                     </div>`).join('');
             };
@@ -965,7 +983,7 @@
                             <span class="text-center">ZB Season</span>
                             <span class="text-center">Finals</span>
                             <span class="text-center font-bold">Total</span>
-                            <span class="text-center">Finals Berths</span>
+                            <span class="text-center">${projected ? 'Top 50 Duos' : 'Finals Berths'}</span>
                             <span class="text-center">Status</span>
                         </div>
                         <div class="divide-y divide-gray-200">
@@ -983,8 +1001,12 @@
                                         <span class="text-sm text-center font-bold text-yellow-700">${formatCupPoints(s.total)}</span>
                                         <span class="text-sm text-center">${s.finalsBerths}</span>
                                         <span class="text-center">${s.eligible
-                                            ? '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-800">✓ Eligible</span>'
-                                            : '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-800">Needs a Finals duo</span>'}</span>
+                                            ? (projected
+                                                ? '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-purple-100 text-purple-800">In Finals position</span>'
+                                                : '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-800">✓ Eligible</span>')
+                                            : (projected
+                                                ? '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-800">Outside top 50</span>'
+                                                : '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-800">Needs a Finals duo</span>')}</span>
                                     </summary>
                                     <div class="grid grid-cols-1 md:grid-cols-4 gap-4 px-4 pb-4 pt-1 bg-gray-50">
                                         <div><div class="text-xs font-semibold text-gray-600 mb-1">BR Regular Season</div>${entryList(s, 'Battle Royale', 'Regular Season')}</div>
