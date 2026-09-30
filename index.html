@@ -79,11 +79,11 @@
                 <div class="flex items-center gap-2 text-sm mb-2">
                     <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
                     <span class="font-medium text-blue-800">Finals Qualification:</span>
-                    <span class="text-blue-700">Teams must play 5 matches. Top 25 qualified teams (by avg of top 5 scores) make the Finals</span>
+                    <span class="text-blue-700">Teams must play at least 4 matches. Top 25 qualified teams (by avg of their best 4 scores) make the Finals</span>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-orange-700">
                     <i data-lucide="alert-circle" class="w-3 h-3 text-orange-600"></i>
-                    <span>Teams with fewer than 5 matches are ranked by their current average but have not yet qualified</span>
+                    <span>Teams with fewer than 4 matches are ranked by their current average but have not yet qualified</span>
                 </div>
             </div>
         </div>
@@ -286,6 +286,9 @@
         let filteredData = [];
         let isStandingsExpanded = false;
         let currentStandingsGameMode = 'Battle Royale';
+
+        // Finals qualification: average of a team's best N scores; must play at least N matches
+        const QUALIFYING_MATCHES = 4;
 
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded');
@@ -677,14 +680,14 @@
                 teamStats[row.teamName].totalElims += row.totalEliminations;
             });
             
-            // Calculate qualification scores (average of top 5 scores)
+            // Calculate qualification scores (average of best QUALIFYING_MATCHES scores)
             const results = Object.entries(teamStats)
                 .map(([team, stats]) => {
                     // Sort scores highest to lowest and take top 5
                     const sortedScores = stats.allScores.sort((a, b) => b - a);
-                    const top5Scores = sortedScores.slice(0, 5);
-                    const qualificationScore = top5Scores.reduce((sum, score) => sum + score, 0) / top5Scores.length;
-                    const isQualified = stats.games >= 5;
+                    const bestScores = sortedScores.slice(0, QUALIFYING_MATCHES);
+                    const qualificationScore = bestScores.reduce((sum, score) => sum + score, 0) / bestScores.length;
+                    const isQualified = stats.games >= QUALIFYING_MATCHES;
                     
                     return { 
                         team,
@@ -769,7 +772,7 @@
                                 <div class="flex flex-col">
                                     <span class="font-medium text-gray-800">${team.team}</span>
                                     ${team.school ? `<span class="text-xs text-gray-500">${team.school}</span>` : ''}
-                                    ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified (needs 5 games)</span>' : ''}
+                                    ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified (needs ${QUALIFYING_MATCHES} games)</span>' : ''}
                                 </div>
                             </div>
                             <div class="flex items-center text-sm">
