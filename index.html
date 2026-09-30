@@ -43,6 +43,15 @@
                     Season Standings
                 </h2>
                 <div class="flex items-center gap-3">
+                    <!-- Stage Filter for Standings -->
+                    <div class="flex items-center gap-2">
+                        <label class="text-sm font-medium text-gray-700">Stage:</label>
+                        <select id="standingsStageFilter" onchange="updateStandingsForGameMode()" class="h-9 border border-gray-300 rounded-lg px-3 py-1 focus:ring-2 focus:ring-red-500 focus:border-red-500 text-sm">
+                            <option value="Regular Season">Regular Season</option>
+                            <option value="Finals">Finals</option>
+                        </select>
+                    </div>
+
                     <!-- Game Mode Filter for Standings -->
                     <div class="flex items-center gap-2">
                         <label class="text-sm font-medium text-gray-700">Mode:</label>
@@ -78,14 +87,38 @@
             <div class="mt-4 p-4 bg-blue-50 border border-blue-200 rounded-lg">
                 <div class="flex items-center gap-2 text-sm mb-2">
                     <i data-lucide="info" class="w-4 h-4 text-blue-600"></i>
-                    <span class="font-medium text-blue-800">Finals Qualification:</span>
-                    <span class="text-blue-700">Duos must play at least 4 matches. The top 50 qualified duos in each mode (Battle Royale and Zero Build), by avg of their best 4 scores, make the Finals</span>
+                    <span class="font-medium text-blue-800" id="standingsNoteTitle">Finals Qualification:</span>
+                    <span class="text-blue-700" id="standingsNoteText"></span>
                 </div>
                 <div class="flex items-center gap-2 text-xs text-orange-700">
                     <i data-lucide="alert-circle" class="w-3 h-3 text-orange-600"></i>
-                    <span>Duos with fewer than 4 matches are ranked by their current average but have not yet qualified</span>
+                    <span id="standingsNoteSub"></span>
                 </div>
             </div>
+        </div>
+
+        <!-- School Cup (traveling trophy) -->
+        <div class="bg-white rounded-xl shadow-lg p-6 mb-6 border-t-4 border-yellow-400">
+            <div class="flex flex-wrap items-start justify-between gap-3 mb-4">
+                <div>
+                    <h2 class="text-xl font-bold text-gray-800 flex items-center gap-2">
+                        <i data-lucide="award" class="w-5 h-5 text-yellow-500"></i>
+                        School Cup
+                    </h2>
+                    <p class="text-sm text-gray-500">Traveling trophy race: the school with the deepest Fortnite program across the regular season and Finals</p>
+                </div>
+                <span id="cupStage" class="text-xs font-semibold px-3 py-1 rounded-full bg-gray-100 text-gray-700"></span>
+            </div>
+
+            <div id="schoolCupLeader" class="mb-4"></div>
+            <div id="schoolCup">
+                <div class="text-gray-500 text-center py-4">Loading...</div>
+            </div>
+
+            <details class="mt-4 p-4 bg-yellow-50 border border-yellow-200 rounded-lg text-sm text-yellow-900">
+                <summary class="font-medium cursor-pointer">How School Cup points work</summary>
+                <ul id="cupRules" class="list-disc pl-5 mt-2 space-y-1"></ul>
+            </details>
         </div>
 
         <!-- Filters Panel -->
@@ -197,7 +230,7 @@
         <div class="bg-white rounded-xl shadow-lg p-6 mb-6">
             <h2 class="text-xl font-bold text-gray-800 mb-1 text-left flex items-center gap-2">
                 <i data-lucide="school" class="w-5 h-5 text-red-600"></i>
-                School Standings
+                School Performance
             </h2>
             <p class="text-sm text-gray-500 mb-4">Ranked by average points per match across all of a school's teams.</p>
             <div id="schoolStandings">
@@ -294,6 +327,20 @@
         // How many ranks the collapsed standings view shows (in columns of 10)
         const PREVIEW_RANKS = 50;
 
+        // ===== FINALS & SCHOOL CUP SETTINGS =====
+        // Matches dated on or after this day count as Finals; everything before is regular season
+        const FINALS_DATE_STRING = '2026-11-07';
+        // Finals score = sum of a duo's best N Finals matches (per mode)
+        const FINALS_COUNTING_MATCHES = 3;
+        // School Cup: how many of a school's duos score in each mode (regular season and Finals each)
+        const CUP_DUOS_PER_MODE = 3;
+        // School Cup: Finals points are worth this many times regular-season points
+        const FINALS_CUP_MULTIPLIER = 1.5;
+        const CUP_MODES = ['Battle Royale', 'Zero Build'];
+
+        const FINALS_DATE = parseLocalDate(FINALS_DATE_STRING);
+        let currentStandingsStage = 'Regular Season';
+
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded');
             lucide.createIcons();
@@ -361,6 +408,7 @@
                 console.log('=== CALLING UPDATE FUNCTIONS ===');
                 populateFilters();
                 updateStandings();
+                updateSchoolCup();
                 updateLeaderboards();
                 updateTeamStats();
                 updateRecentGames();
@@ -390,6 +438,7 @@
                         
                         populateFilters();
                         updateStandings();
+                        updateSchoolCup();
                         updateLeaderboards();
                         updateTeamStats();
                         updateRecentGames();
@@ -436,6 +485,7 @@
                     school: schoolName,
                     teamName: teamName,
                     date: row['Date'] || '',
+                    isFinals: isFinalsMatch(row['Date'], row['Timestamp']),
                     gameMode: row['Game Mode'] || '',
                     teamPlacement: parseInt(row['Team Placement']) || 0,
                     totalPoints: parseInt(row['Total Points']) || 0,
@@ -457,6 +507,11 @@
             
             console.log('Parsed', allData.length, 'valid game records');
             updateLastUpdated();
+
+            // Once Finals results exist, open Season Standings on the Finals view
+            currentStandingsStage = allData.some(r => r.isFinals) ? 'Finals' : 'Regular Season';
+            const stageSelect = document.getElementById('standingsStageFilter');
+            if (stageSelect) stageSelect.value = currentStandingsStage;
         }
 
         function parseCSVLine(line) {
@@ -603,113 +658,347 @@
             console.log('Team stats DOM updated');
         }
 
-        // NEW FUNCTION: Update standings when game mode filter changes
+        // ===== DATES =====
+        // Parses "11/7/2026", "11/7/2026 14:03:00" or "2026-11-07" as a local calendar date
+        function parseLocalDate(value) {
+            if (!value) return null;
+            const str = String(value).trim();
+            let m = str.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
+            if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+            m = str.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+            if (m) {
+                const year = m[3].length === 2 ? 2000 + +m[3] : +m[3];
+                return new Date(year, +m[1] - 1, +m[2]);
+            }
+            const d = new Date(str);
+            return isNaN(d) ? null : new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        }
+
+        function isFinalsMatch(dateValue, timestampValue) {
+            const d = parseLocalDate(dateValue) || parseLocalDate(timestampValue);
+            return !!(d && FINALS_DATE && d >= FINALS_DATE);
+        }
+
+        function formatFinalsDate() {
+            return FINALS_DATE.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+        }
+
+        function modeMatches(row, mode) {
+            return (row.gameMode || '').toString().trim().toLowerCase() === mode.toString().trim().toLowerCase();
+        }
+
+        // ===== SEASON STANDINGS =====
         function updateStandingsForGameMode() {
             currentStandingsGameMode = document.getElementById('standingsGameModeFilter').value;
-            console.log('Updating standings for game mode:', currentStandingsGameMode || 'All Modes');
+            currentStandingsStage = document.getElementById('standingsStageFilter').value;
             updateStandings();
         }
 
         function updateStandings() {
-            console.log('=== UPDATING STANDINGS ===');
-            const standings = calculateTeamStandings();
-            console.log('Calculated', standings.length, 'team standings for mode:', currentStandingsGameMode || 'All Modes');
+            const standings = currentStandingsStage === 'Finals'
+                ? calculateFinalsStandings(currentStandingsGameMode)
+                : calculateTeamStandings(currentStandingsGameMode);
+            console.log('Standings:', currentStandingsStage, currentStandingsGameMode, standings.length, 'teams');
+            updateStandingsNote();
             updateTop30Standings(standings.slice(0, PREVIEW_RANKS));
             updateAllStandings(standings);
         }
 
-        // MODIFIED FUNCTION: Calculate standings with game mode filter
-        function calculateTeamStandings() {
-            const teamStats = {};
-            
-            // Filter data by current standings game mode if selected
-            let dataToUse = allData;
-            if (currentStandingsGameMode) {
-                // Debug: Log what we're filtering for and what's available
-                console.log('Filtering for game mode:', `"${currentStandingsGameMode}"`);
-                console.log('Available game modes in data:', [...new Set(allData.map(row => `"${row.gameMode}"`))]);
-                
-                // Map user selection to actual data values
-                let actualGameMode = currentStandingsGameMode;
-                if (currentStandingsGameMode === 'Battle Royale') {
-                    actualGameMode = 'Battle Royale'; // Map to what's actually in the data
-                }
-                
-                // Use case-insensitive and trimmed comparison to handle variations
-                dataToUse = allData.filter(row => {
-                    const normalizedRowMode = row.gameMode?.toString().trim().toLowerCase() || '';
-                    const normalizedFilterMode = actualGameMode.toString().trim().toLowerCase();
-                    return normalizedRowMode === normalizedFilterMode;
-                });
-                
-                console.log('Mapped filter mode:', `"${actualGameMode}"`);
-                console.log('Filtered data length:', dataToUse.length);
-                console.log('Sample filtered records:', dataToUse.slice(0, 3).map(row => ({ 
-                    team: row.teamName, 
-                    mode: `"${row.gameMode}"`,
-                    points: row.totalPoints 
-                })));
+        function updateStandingsNote() {
+            const title = document.getElementById('standingsNoteTitle');
+            const text = document.getElementById('standingsNoteText');
+            const sub = document.getElementById('standingsNoteSub');
+            if (currentStandingsStage === 'Finals') {
+                title.textContent = 'Finals Scoring:';
+                text.textContent = `Finals are played on ${formatFinalsDate()}. Each duo's best ${FINALS_COUNTING_MATCHES} Finals matches are added together; the highest total wins the mode.`;
+                sub.textContent = 'Only matches dated on or after the Finals date count here.';
+            } else {
+                title.textContent = 'Finals Qualification:';
+                text.textContent = `Duos must play at least ${QUALIFYING_MATCHES} matches. The top ${FINALS_SPOTS} qualified duos in each mode (Battle Royale and Zero Build), by avg of their best ${QUALIFYING_MATCHES} scores, make the Finals.`;
+                sub.textContent = `Duos with fewer than ${QUALIFYING_MATCHES} matches are ranked by their current average but have not yet qualified. Matches on or after ${formatFinalsDate()} count as Finals, not regular season.`;
             }
-            
-            // Build team stats with all scores for each team
+        }
+
+        // Regular-season standings for one mode (Finals matches are excluded)
+        function calculateTeamStandings(mode = currentStandingsGameMode) {
+            const teamStats = {};
+            const dataToUse = allData.filter(row => !row.isFinals && (!mode || modeMatches(row, mode)));
+
             dataToUse.forEach(row => {
                 if (!teamStats[row.teamName]) {
                     teamStats[row.teamName] = {
                         school: row.school || '',
                         totalPoints: 0,
-                        games: 0, 
-                        wins: 0, 
-                        top5s: 0, 
+                        games: 0,
+                        wins: 0,
+                        top5s: 0,
                         totalElims: 0,
-                        allScores: [] // Track all scores for top 5 calculation
+                        allScores: []
                     };
                 }
+                const t = teamStats[row.teamName];
                 // Fill in school if an earlier row for this team left it blank
-                if (!teamStats[row.teamName].school && row.school) {
-                    teamStats[row.teamName].school = row.school;
-                }
-                teamStats[row.teamName].totalPoints += row.totalPoints;
-                teamStats[row.teamName].games++;
-                teamStats[row.teamName].allScores.push(row.totalPoints);
-                if (row.teamPlacement === 1) teamStats[row.teamName].wins++;
-                if (row.teamPlacement <= 5) teamStats[row.teamName].top5s++;
-                teamStats[row.teamName].totalElims += row.totalEliminations;
+                if (!t.school && row.school) t.school = row.school;
+                t.totalPoints += row.totalPoints;
+                t.games++;
+                t.allScores.push(row.totalPoints);
+                if (row.teamPlacement === 1) t.wins++;
+                if (row.teamPlacement <= 5) t.top5s++;
+                t.totalElims += row.totalEliminations;
             });
-            
-            // Calculate qualification scores (average of best QUALIFYING_MATCHES scores)
+
+            // Qualification score = average of best QUALIFYING_MATCHES scores
             const results = Object.entries(teamStats)
                 .map(([team, stats]) => {
-                    // Sort scores highest to lowest and take top 5
-                    const sortedScores = stats.allScores.sort((a, b) => b - a);
-                    const bestScores = sortedScores.slice(0, QUALIFYING_MATCHES);
+                    const bestScores = [...stats.allScores].sort((a, b) => b - a).slice(0, QUALIFYING_MATCHES);
                     const qualificationScore = bestScores.reduce((sum, score) => sum + score, 0) / bestScores.length;
-                    const isQualified = stats.games >= QUALIFYING_MATCHES;
-                    
-                    return { 
+                    return {
                         team,
                         school: stats.school,
-                        qualificationScore: Math.round(qualificationScore * 10) / 10, // Round to 1 decimal
+                        qualificationScore: Math.round(qualificationScore * 10) / 10,
                         totalPoints: stats.totalPoints,
                         games: stats.games,
                         wins: stats.wins,
                         top5s: stats.top5s,
                         totalElims: stats.totalElims,
-                        isQualified
+                        isQualified: stats.games >= QUALIFYING_MATCHES
                     };
                 })
-                .sort((a, b) => b.qualificationScore - a.qualificationScore) // Sort by qualification score
+                .sort((a, b) => b.qualificationScore - a.qualificationScore)
                 .map((team, index) => ({ ...team, rank: index + 1 }));
 
-            // Top FINALS_SPOTS teams among those that have played enough matches make the Finals
+            // Top FINALS_SPOTS teams among those that have played enough matches make the Finals.
+            // finalsSeed = position among Finals qualifiers (1 to FINALS_SPOTS)
             let finalsCount = 0;
             results.forEach(team => {
                 team.makesFinals = team.isQualified && finalsCount < FINALS_SPOTS;
-                if (team.makesFinals) finalsCount++;
+                team.finalsSeed = null;
+                if (team.makesFinals) {
+                    finalsCount++;
+                    team.finalsSeed = finalsCount;
+                }
             });
-                
-            console.log('Final standings results:', results.length, 'teams');
-            
+
             return results;
+        }
+
+        // Finals standings for one mode: sum of each duo's best FINALS_COUNTING_MATCHES Finals matches
+        function calculateFinalsStandings(mode = currentStandingsGameMode) {
+            const teamStats = {};
+            allData.filter(row => row.isFinals && modeMatches(row, mode)).forEach(row => {
+                if (!teamStats[row.teamName]) {
+                    teamStats[row.teamName] = { school: row.school || '', scores: [], totalPoints: 0, games: 0, wins: 0, top5s: 0, totalElims: 0 };
+                }
+                const t = teamStats[row.teamName];
+                if (!t.school && row.school) t.school = row.school;
+                t.scores.push(row.totalPoints);
+                t.totalPoints += row.totalPoints;
+                t.games++;
+                if (row.teamPlacement === 1) t.wins++;
+                if (row.teamPlacement <= 5) t.top5s++;
+                t.totalElims += row.totalEliminations;
+            });
+
+            return Object.entries(teamStats)
+                .map(([team, t]) => ({
+                    team,
+                    school: t.school,
+                    qualificationScore: [...t.scores].sort((a, b) => b - a).slice(0, FINALS_COUNTING_MATCHES).reduce((a, b) => a + b, 0),
+                    totalPoints: t.totalPoints,
+                    games: t.games,
+                    wins: t.wins,
+                    top5s: t.top5s,
+                    totalElims: t.totalElims,
+                    isQualified: true,
+                    makesFinals: true
+                }))
+                // Ties on Finals score go to the higher total across all Finals matches
+                .sort((a, b) => b.qualificationScore - a.qualificationScore || b.totalPoints - a.totalPoints)
+                .map((team, index) => ({ ...team, rank: index + 1 }));
+        }
+
+        // ===== SCHOOL CUP =====
+        function calculateSchoolCup() {
+            const schools = {};
+            const getSchool = name => {
+                if (!schools[name]) {
+                    schools[name] = {
+                        school: name,
+                        points: { 'Battle Royale': 0, 'Zero Build': 0, Finals: 0 },
+                        total: 0,
+                        finalsBerths: 0,
+                        bestDuoPoints: 0,
+                        entries: []
+                    };
+                }
+                return schools[name];
+            };
+
+            // Adds each school's best CUP_DUOS_PER_MODE entries from one group to its totals
+            const scoreGroup = (entries, bucket) => {
+                const bySchool = {};
+                entries.forEach(e => (bySchool[e.school] = bySchool[e.school] || []).push(e));
+                Object.entries(bySchool).forEach(([name, list]) => {
+                    const s = getSchool(name);
+                    list.sort((a, b) => b.points - a.points).forEach((e, i) => {
+                        e.counted = i < CUP_DUOS_PER_MODE;
+                        if (e.counted) {
+                            s.points[bucket] += e.points;
+                            s.total += e.points;
+                        }
+                        s.bestDuoPoints = Math.max(s.bestDuoPoints, e.points);
+                        s.entries.push(e);
+                    });
+                });
+            };
+
+            CUP_MODES.forEach(mode => {
+                const regular = calculateTeamStandings(mode);
+                const finals = calculateFinalsStandings(mode);
+
+                // List every school that has played, even with 0 points
+                regular.concat(finals).forEach(t => { if (t.school) getSchool(t.school); });
+
+                const regularEntries = regular
+                    .filter(t => t.makesFinals && t.school)
+                    .map(t => ({
+                        school: t.school, team: t.team, mode, stage: 'Regular Season',
+                        place: t.finalsSeed, points: FINALS_SPOTS + 1 - t.finalsSeed
+                    }));
+                regularEntries.forEach(e => getSchool(e.school).finalsBerths++);
+                scoreGroup(regularEntries, mode);
+
+                const finalsEntries = finals
+                    .filter(t => t.school)
+                    .map(t => ({
+                        school: t.school, team: t.team, mode, stage: 'Finals',
+                        place: t.rank, points: Math.max(0, FINALS_SPOTS + 1 - t.rank) * FINALS_CUP_MULTIPLIER
+                    }));
+                scoreGroup(finalsEntries, 'Finals');
+            });
+
+            // Eligible = at least one duo made the Finals. Ties: more Finals berths, then best single duo.
+            const list = Object.values(schools)
+                .map(s => ({ ...s, eligible: s.finalsBerths > 0 }))
+                .sort((a, b) =>
+                    (b.eligible - a.eligible) ||
+                    (b.total - a.total) ||
+                    (b.finalsBerths - a.finalsBerths) ||
+                    (b.bestDuoPoints - a.bestDuoPoints) ||
+                    a.school.localeCompare(b.school));
+
+            let rank = 0;
+            list.forEach(s => { s.rank = s.eligible ? ++rank : null; });
+            return list;
+        }
+
+        function formatCupPoints(n) {
+            return Number.isInteger(n) ? n.toLocaleString() : n.toFixed(1);
+        }
+
+        function updateSchoolCup() {
+            const cup = calculateSchoolCup();
+            const hasFinals = allData.some(r => r.isFinals);
+
+            // Stage badge
+            const stage = document.getElementById('cupStage');
+            stage.textContent = hasFinals ? `Finals results included · ${formatFinalsDate()}` : `Regular Season · Finals ${formatFinalsDate()}`;
+            stage.className = 'text-xs font-semibold px-3 py-1 rounded-full ' + (hasFinals ? 'bg-yellow-100 text-yellow-800' : 'bg-blue-100 text-blue-800');
+
+            // Rules (built from the settings so they always match the math)
+            document.getElementById('cupRules').innerHTML = `
+                <li><b>Regular season:</b> each duo that makes the Finals earns points by its Finals seed in its mode: 1st seed = ${FINALS_SPOTS} pts, ${FINALS_SPOTS}th seed = 1 pt.</li>
+                <li><b>Finals (${formatFinalsDate()}):</b> each duo earns points by Finals placement (best ${FINALS_COUNTING_MATCHES} matches added together), worth ${FINALS_CUP_MULTIPLIER}×: 1st = ${formatCupPoints(FINALS_SPOTS * FINALS_CUP_MULTIPLIER)} pts.</li>
+                <li><b>Depth:</b> only a school's best ${CUP_DUOS_PER_MODE} duos per mode count, for both the regular season and the Finals, so a school can't win just by entering the most teams.</li>
+                <li><b>Eligibility:</b> a school needs at least one duo in the Finals (either mode) to win the trophy.</li>
+                <li><b>Tiebreakers:</b> more Finals berths, then the higher-scoring single duo.</li>`;
+
+            const eligible = cup.filter(s => s.eligible);
+            const leaderEl = document.getElementById('schoolCupLeader');
+            if (eligible.length === 0) {
+                leaderEl.innerHTML = '<div class="p-4 rounded-lg bg-gray-50 text-gray-500 text-sm text-center">No school has a duo in Finals position yet</div>';
+            } else {
+                const leader = eligible[0];
+                const lead = eligible[1] ? leader.total - eligible[1].total : null;
+                leaderEl.innerHTML = `
+                    <div class="flex flex-wrap items-center justify-between gap-4 p-4 rounded-lg bg-gradient-to-r from-yellow-100 to-yellow-50 border border-yellow-300">
+                        <div class="flex items-center gap-3">
+                            <div class="w-12 h-12 rounded-full bg-yellow-500 text-white flex items-center justify-center">
+                                <i data-lucide="trophy" class="w-6 h-6"></i>
+                            </div>
+                            <div>
+                                <div class="text-xs font-semibold text-yellow-800 uppercase tracking-wide">${hasFinals ? 'Cup Leader' : 'Current Cup Leader'}</div>
+                                <div class="text-2xl font-bold text-gray-900">${escapeHtml(leader.school)}</div>
+                            </div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-3xl font-bold text-yellow-700">${formatCupPoints(leader.total)} <span class="text-base font-medium">pts</span></div>
+                            <div class="text-sm text-yellow-800">${lead === null ? 'Only eligible school' : lead === 0 ? 'Tied on points (ahead on tiebreaker)' : `Leads ${escapeHtml(eligible[1].school)} by ${formatCupPoints(lead)}`}</div>
+                        </div>
+                    </div>`;
+            }
+
+            const cols = 'grid grid-cols-[3rem_minmax(10rem,1fr)_5.5rem_5.5rem_5.5rem_5.5rem_5.5rem_8.5rem] items-center gap-2';
+            const badge = rank => rank === 1 ? 'bg-yellow-500 text-white'
+                : rank === 2 ? 'bg-gray-400 text-white'
+                : rank === 3 ? 'bg-amber-700 text-white'
+                : 'bg-gray-100 text-gray-700';
+
+            // Breakdown of the duos behind a school's points (greyed = not in the school's best N)
+            const entryList = (s, mode, stageName) => {
+                const items = s.entries.filter(e => e.stage === stageName && e.mode === mode);
+                if (items.length === 0) return '<div class="text-xs text-gray-400">None</div>';
+                return items.map(e => `
+                    <div class="flex justify-between gap-2 text-xs ${e.counted ? 'text-gray-800' : 'text-gray-400'}">
+                        <span class="truncate">${escapeHtml(e.team)} <span class="text-gray-500">(${e.stage === 'Finals' ? 'Finals #' : 'Seed #'}${e.place})</span></span>
+                        <span class="shrink-0 font-medium">${e.counted ? formatCupPoints(e.points) : 'not counted'}</span>
+                    </div>`).join('');
+            };
+
+            document.getElementById('schoolCup').innerHTML = `
+                <div class="overflow-x-auto">
+                    <div class="min-w-[780px]">
+                        <div class="${cols} px-2 py-3 bg-gray-50 text-xs font-medium text-gray-700 rounded-t-lg">
+                            <span>Rank</span>
+                            <span>School</span>
+                            <span class="text-center">BR Season</span>
+                            <span class="text-center">ZB Season</span>
+                            <span class="text-center">Finals</span>
+                            <span class="text-center font-bold">Total</span>
+                            <span class="text-center">Finals Berths</span>
+                            <span class="text-center">Status</span>
+                        </div>
+                        <div class="divide-y divide-gray-200">
+                            ${cup.map(s => `
+                                <details class="group ${s.eligible ? '' : 'opacity-60'}">
+                                    <summary class="${cols} px-2 py-3 cursor-pointer hover:bg-gray-50 list-none [&::-webkit-details-marker]:hidden">
+                                        <span>${s.rank ? `<span class="w-7 h-7 rounded-full ${badge(s.rank)} text-xs font-bold flex items-center justify-center">${s.rank}</span>` : '<span class="text-gray-400 text-sm pl-2">—</span>'}</span>
+                                        <span class="text-sm font-medium text-gray-800 flex items-center gap-1 min-w-0">
+                                            <i data-lucide="chevron-right" class="w-4 h-4 shrink-0 text-gray-400 transition-transform group-open:rotate-90"></i>
+                                            <span class="truncate">${escapeHtml(s.school)}</span>
+                                        </span>
+                                        <span class="text-sm text-center">${formatCupPoints(s.points['Battle Royale'])}</span>
+                                        <span class="text-sm text-center">${formatCupPoints(s.points['Zero Build'])}</span>
+                                        <span class="text-sm text-center">${formatCupPoints(s.points.Finals)}</span>
+                                        <span class="text-sm text-center font-bold text-yellow-700">${formatCupPoints(s.total)}</span>
+                                        <span class="text-sm text-center">${s.finalsBerths}</span>
+                                        <span class="text-center">${s.eligible
+                                            ? '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-green-100 text-green-800">✓ Eligible</span>'
+                                            : '<span class="text-xs font-semibold px-2 py-1 rounded-full bg-orange-100 text-orange-800">Needs a Finals duo</span>'}</span>
+                                    </summary>
+                                    <div class="grid grid-cols-1 md:grid-cols-4 gap-4 px-4 pb-4 pt-1 bg-gray-50">
+                                        <div><div class="text-xs font-semibold text-gray-600 mb-1">BR Regular Season</div>${entryList(s, 'Battle Royale', 'Regular Season')}</div>
+                                        <div><div class="text-xs font-semibold text-gray-600 mb-1">ZB Regular Season</div>${entryList(s, 'Zero Build', 'Regular Season')}</div>
+                                        <div><div class="text-xs font-semibold text-gray-600 mb-1">BR Finals</div>${entryList(s, 'Battle Royale', 'Finals')}</div>
+                                        <div><div class="text-xs font-semibold text-gray-600 mb-1">ZB Finals</div>${entryList(s, 'Zero Build', 'Finals')}</div>
+                                    </div>
+                                </details>
+                            `).join('')}
+                        </div>
+                    </div>
+                </div>`;
+
+            lucide.createIcons();
         }
 
         function updateTop30Standings(topTeams) {
@@ -766,7 +1055,7 @@
                         <span>Team / School</span>
                     </div>
                     <div class="flex items-center text-xs">
-                        <span class="font-semibold w-24 text-center">Qual. Score</span>
+                        <span class="font-semibold w-24 text-center">${currentStandingsStage === 'Finals' ? 'Finals Score' : 'Qual. Score'}</span>
                         <span class="text-gray-600 w-20 text-center">Total Points</span>
                         <span class="text-gray-600 w-12 text-center">Games</span>
                         <span class="text-gray-600 w-12 text-center">Wins</span>
