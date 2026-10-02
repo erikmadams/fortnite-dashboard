@@ -401,7 +401,7 @@
                 
                 parseCSVData(csvText);
                 
-                console.log('Generated', allData.length, 'games for', [...new Set(allData.map(d => d.teamName))].length, 'teams');
+                console.log('Generated', allData.length, 'games for', [...new Set(allData.map(d => d.teamKey))].length, 'teams');
                 
                 filteredData = [...allData];
                 
@@ -484,6 +484,8 @@
                     timestamp: row['Timestamp'] || '',
                     school: schoolName,
                     teamName: teamName,
+                    // Many schools reuse names like "Team 1", so a team is identified by school + name
+                    teamKey: `${schoolName.trim().toLowerCase()}|${teamName.trim().toLowerCase()}`,
                     date: row['Date'] || '',
                     isFinals: isFinalsMatch(row['Date'], row['Timestamp']),
                     gameMode: row['Game Mode'] || '',
@@ -536,86 +538,70 @@
             return values;
         }
 
+        // Builds the Team dropdown. Values are team keys (school + name); labels show the school
+        // when all schools are listed, since many schools use the same team names.
+        function fillTeamOptions(selectedSchool) {
+            const teamFilter = document.getElementById('teamFilter');
+            const teams = {};
+            allData
+                .filter(row => !selectedSchool || row.school === selectedSchool)
+                .forEach(row => { if (!teams[row.teamKey]) teams[row.teamKey] = row; });
+
+            teamFilter.innerHTML = '<option value="">All Teams</option>';
+            Object.entries(teams)
+                .sort((a, b) => (a[1].school + a[1].teamName).localeCompare(b[1].school + b[1].teamName))
+                .forEach(([key, row]) => {
+                    const option = document.createElement('option');
+                    option.value = key;
+                    option.textContent = selectedSchool ? row.teamName : `${row.teamName} (${row.school})`;
+                    teamFilter.appendChild(option);
+                });
+        }
+
         function populateFilters() {
-            console.log('Populating filters...');
-            const schools = [...new Set(allData.map(row => row.school))];
-            const teams = [...new Set(allData.map(row => row.teamName))];
+            const schools = [...new Set(allData.map(row => row.school))].sort();
             const modes = [...new Set(allData.map(row => row.gameMode))];
-            
+
             const schoolFilter = document.getElementById('schoolFilter');
             const teamFilter = document.getElementById('teamFilter');
             const modeFilter = document.getElementById('gameModeFilter');
-            
-            // Clear existing options except first
+
             schoolFilter.innerHTML = '<option value="">All Schools</option>';
-            teamFilter.innerHTML = '<option value="">All Teams</option>';
             modeFilter.innerHTML = '<option value="">All Modes</option>';
-            
+
             schools.forEach(school => {
                 const option = document.createElement('option');
                 option.value = school;
                 option.textContent = school;
                 schoolFilter.appendChild(option);
             });
-            
-            teams.forEach(team => {
-                const option = document.createElement('option');
-                option.value = team;
-                option.textContent = team;
-                teamFilter.appendChild(option);
-            });
-            
+
+            fillTeamOptions('');
+
             modes.forEach(mode => {
                 const option = document.createElement('option');
                 option.value = mode;
                 option.textContent = mode;
                 modeFilter.appendChild(option);
             });
-            
-            // Add event listeners for cascading dropdowns
+
             schoolFilter.onchange = onSchoolFilterChange;
             teamFilter.onchange = onTeamFilterChange;
-            
-            console.log('Filters populated:', schools.length, 'schools,', teams.length, 'teams,', modes.length, 'modes');
         }
 
         function onSchoolFilterChange() {
-            const selectedSchool = document.getElementById('schoolFilter').value;
-            const teamFilter = document.getElementById('teamFilter');
-            
-            // Clear current team selection
-            teamFilter.value = '';
-            
-            // Get teams for selected school
-            let availableTeams;
-            if (selectedSchool) {
-                availableTeams = [...new Set(allData
-                    .filter(row => row.school === selectedSchool)
-                    .map(row => row.teamName))];
-            } else {
-                availableTeams = [...new Set(allData.map(row => row.teamName))];
-            }
-            
-            // Rebuild team dropdown
-            teamFilter.innerHTML = '<option value="">All Teams</option>';
-            availableTeams.forEach(team => {
-                const option = document.createElement('option');
-                option.value = team;
-                option.textContent = team;
-                teamFilter.appendChild(option);
-            });
+            fillTeamOptions(document.getElementById('schoolFilter').value);
         }
 
         function onTeamFilterChange() {
-            const selectedTeam = document.getElementById('teamFilter').value;
+            const selectedKey = document.getElementById('teamFilter').value;
+            if (!selectedKey) return;
+            const row = allData.find(r => r.teamKey === selectedKey);
             const schoolFilter = document.getElementById('schoolFilter');
-            
-            if (selectedTeam) {
-                // Find the school for this team
-                const teamSchool = allData.find(row => row.teamName === selectedTeam)?.school;
-                if (teamSchool) {
-                    schoolFilter.value = teamSchool;
-                }
+            if (row && schoolFilter.value !== row.school) {
+                schoolFilter.value = row.school;
+                fillTeamOptions(row.school);
+                document.getElementById('teamFilter').value = selectedKey;
             }
         }
 
@@ -725,8 +711,9 @@
             const dataToUse = allData.filter(row => !row.isFinals && (!mode || modeMatches(row, mode)));
 
             dataToUse.forEach(row => {
-                if (!teamStats[row.teamName]) {
-                    teamStats[row.teamName] = {
+                if (!teamStats[row.teamKey]) {
+                    teamStats[row.teamKey] = {
+                        teamName: row.teamName,
                         school: row.school || '',
                         totalPoints: 0,
                         games: 0,
@@ -736,7 +723,7 @@
                         allScores: []
                     };
                 }
-                const t = teamStats[row.teamName];
+                const t = teamStats[row.teamKey];
                 // Fill in school if an earlier row for this team left it blank
                 if (!t.school && row.school) t.school = row.school;
                 t.totalPoints += row.totalPoints;
@@ -749,11 +736,12 @@
 
             // Qualification score = average of best QUALIFYING_MATCHES scores
             const results = Object.entries(teamStats)
-                .map(([team, stats]) => {
+                .map(([key, stats]) => {
                     const bestScores = [...stats.allScores].sort((a, b) => b - a).slice(0, QUALIFYING_MATCHES);
                     const qualificationScore = bestScores.reduce((sum, score) => sum + score, 0) / bestScores.length;
                     return {
-                        team,
+                        team: stats.teamName,
+                        teamKey: key,
                         school: stats.school,
                         qualificationScore: Math.round(qualificationScore * 10) / 10,
                         totalPoints: stats.totalPoints,
@@ -786,10 +774,10 @@
         function calculateFinalsStandings(mode = currentStandingsGameMode) {
             const teamStats = {};
             allData.filter(row => row.isFinals && modeMatches(row, mode)).forEach(row => {
-                if (!teamStats[row.teamName]) {
-                    teamStats[row.teamName] = { school: row.school || '', scores: [], totalPoints: 0, games: 0, wins: 0, top5s: 0, totalElims: 0 };
+                if (!teamStats[row.teamKey]) {
+                    teamStats[row.teamKey] = { teamName: row.teamName, school: row.school || '', scores: [], totalPoints: 0, games: 0, wins: 0, top5s: 0, totalElims: 0 };
                 }
-                const t = teamStats[row.teamName];
+                const t = teamStats[row.teamKey];
                 if (!t.school && row.school) t.school = row.school;
                 t.scores.push(row.totalPoints);
                 t.totalPoints += row.totalPoints;
@@ -800,8 +788,9 @@
             });
 
             return Object.entries(teamStats)
-                .map(([team, t]) => ({
-                    team,
+                .map(([key, t]) => ({
+                    team: t.teamName,
+                    teamKey: key,
                     school: t.school,
                     qualificationScore: [...t.scores].sort((a, b) => b - a).slice(0, FINALS_COUNTING_MATCHES).reduce((a, b) => a + b, 0),
                     totalPoints: t.totalPoints,
@@ -1165,82 +1154,47 @@
             updateSchoolStandings();
         }
 
-        function updateTeamLeaderboard() {
-            const teamStats = {};
+        // Groups filteredData by team (school + name) and renders a top-5 team leaderboard
+        function renderTeamLeaderboard(containerId, valueOf, sortDir, format, badgeClasses, valueClass) {
+            const teams = {};
             filteredData.forEach(row => {
-                if (!teamStats[row.teamName]) teamStats[row.teamName] = { placements: [] };
-                teamStats[row.teamName].placements.push(row.teamPlacement);
+                if (!teams[row.teamKey]) teams[row.teamKey] = { team: row.teamName, school: row.school, values: [] };
+                teams[row.teamKey].values.push(valueOf(row));
             });
-            
-            const leaderboard = Object.entries(teamStats)
-                .map(([team, stats]) => ({
-                    team,
-                    avgPlacement: stats.placements.reduce((a, b) => a + b, 0) / stats.placements.length
-                }))
-                .sort((a, b) => a.avgPlacement - b.avgPlacement)
+
+            const leaderboard = Object.values(teams)
+                .map(t => ({ ...t, avg: t.values.reduce((a, b) => a + b, 0) / t.values.length }))
+                .sort((a, b) => sortDir * (a.avg - b.avg))
                 .slice(0, 5);
-            
-            document.getElementById('teamLeaderboard').innerHTML = leaderboard.map((item, index) => `
+
+            document.getElementById(containerId).innerHTML = leaderboard.map((item, index) => `
                 <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-3">
-                        <span class="w-6 h-6 rounded-full bg-yellow-100 text-yellow-800 text-sm font-bold flex items-center justify-center">${index + 1}</span>
-                        <span class="font-medium text-gray-800">${item.team}</span>
+                    <div class="flex items-center gap-3 min-w-0">
+                        <span class="w-6 h-6 shrink-0 rounded-full ${badgeClasses} text-sm font-bold flex items-center justify-center">${index + 1}</span>
+                        <div class="flex flex-col min-w-0">
+                            <span class="font-medium text-gray-800 truncate">${escapeHtml(item.team)}</span>
+                            ${item.school ? `<span class="text-xs text-gray-500 truncate">${escapeHtml(item.school)}</span>` : ''}
+                        </div>
                     </div>
-                    <span class="font-bold text-yellow-600">${item.avgPlacement.toFixed(1)}</span>
+                    <span class="font-bold ${valueClass} shrink-0 pl-2">${format(item.avg)}</span>
                 </div>
             `).join('');
+        }
+
+        function updateTeamLeaderboard() {
+            // Lower average placement is better
+            renderTeamLeaderboard('teamLeaderboard', r => r.teamPlacement, 1, v => v.toFixed(1),
+                'bg-yellow-100 text-yellow-800', 'text-yellow-600');
         }
 
         function updatePointsLeaderboard() {
-            const teamStats = {};
-            filteredData.forEach(row => {
-                if (!teamStats[row.teamName]) teamStats[row.teamName] = { points: [] };
-                teamStats[row.teamName].points.push(row.totalPoints);
-            });
-            
-            const leaderboard = Object.entries(teamStats)
-                .map(([team, stats]) => ({
-                    team,
-                    avgPoints: Math.round(stats.points.reduce((a, b) => a + b, 0) / stats.points.length)
-                }))
-                .sort((a, b) => b.avgPoints - a.avgPoints)
-                .slice(0, 5);
-            
-            document.getElementById('pointsLeaderboard').innerHTML = leaderboard.map((item, index) => `
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-3">
-                        <span class="w-6 h-6 rounded-full bg-blue-100 text-blue-800 text-sm font-bold flex items-center justify-center">${index + 1}</span>
-                        <span class="font-medium text-gray-800">${item.team}</span>
-                    </div>
-                    <span class="font-bold text-blue-600">${item.avgPoints}</span>
-                </div>
-            `).join('');
+            renderTeamLeaderboard('pointsLeaderboard', r => r.totalPoints, -1, v => Math.round(v),
+                'bg-blue-100 text-blue-800', 'text-blue-600');
         }
 
         function updateElimsLeaderboard() {
-            const teamStats = {};
-            filteredData.forEach(row => {
-                if (!teamStats[row.teamName]) teamStats[row.teamName] = { elims: [] };
-                teamStats[row.teamName].elims.push(row.totalEliminations);
-            });
-            
-            const leaderboard = Object.entries(teamStats)
-                .map(([team, stats]) => ({
-                    team,
-                    avgElims: (stats.elims.reduce((a, b) => a + b, 0) / stats.elims.length).toFixed(1)
-                }))
-                .sort((a, b) => parseFloat(b.avgElims) - parseFloat(a.avgElims))
-                .slice(0, 5);
-            
-            document.getElementById('elimsLeaderboard').innerHTML = leaderboard.map((item, index) => `
-                <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div class="flex items-center gap-3">
-                        <span class="w-6 h-6 rounded-full bg-red-100 text-red-800 text-sm font-bold flex items-center justify-center">${index + 1}</span>
-                        <span class="font-medium text-gray-800">${item.team}</span>
-                    </div>
-                    <span class="font-bold text-red-600">${item.avgElims}</span>
-                </div>
-            `).join('');
+            renderTeamLeaderboard('elimsLeaderboard', r => r.totalEliminations, -1, v => v.toFixed(1),
+                'bg-red-100 text-red-800', 'text-red-600');
         }
 
         // ===== PLAYER LEADERBOARDS =====
@@ -1391,7 +1345,7 @@
                     schools[name] = { school: name, teams: new Set(), games: 0, points: 0, wins: 0, top5s: 0, elims: 0 };
                 }
                 const s = schools[name];
-                s.teams.add(row.teamName);
+                s.teams.add(row.teamKey);
                 s.games++;
                 s.points += row.totalPoints;
                 s.elims += row.totalEliminations;
@@ -1583,7 +1537,7 @@
             
             filteredData = allData.filter(row => {
                 const matchesSchool = !schoolFilter || row.school === schoolFilter;
-                const matchesTeam = !teamFilter || row.teamName === teamFilter;
+                const matchesTeam = !teamFilter || row.teamKey === teamFilter;
                 const matchesMode = !gameModeFilter || row.gameMode === gameModeFilter;
                 
                 return matchesSchool && matchesTeam && matchesMode;
