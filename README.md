@@ -104,6 +104,8 @@ The dashboard tracks performance for all participating KSEL schools:
 - Bakersfield Christian High School
 - Bakersfield High School
 - Centennial High School
+- Cesar Chavez High School
+- Del Oro High School
 - Delano High School
 - East Bakersfield High School
 - Foothill High School
@@ -114,17 +116,15 @@ The dashboard tracks performance for all participating KSEL schools:
 - Independence High School
 - Kern Valley High School
 - Liberty High School
-- McFarland High School
 - Mira Monte High School
 - North High School
 - Ridgeview High School
+- Robert F Kennedy High School
 - Shafter High School
 - South High School
 - Stockdale High School
-- Taft High School
-- Tehachapi High School
-- Valley Home Education Academy
-- Wasco High School
+- Tierra Del Sol High School
+- Valley High School
 - West High School
 
 ## Technical Stack
