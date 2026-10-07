@@ -49,7 +49,8 @@ The School Cup rewards the school with the deepest Fortnite program across the r
 **How points are earned:**
 - **Regular season** - Each duo in Finals position earns points by its Finals seed in its mode: 1st seed = 50 points, 50th seed = 1 point
 - **Finals** - Each duo earns points by its Finals placement (best 3 of 4 matches), worth 1.5x: 1st place = 75 points
-- **Depth cap** - Only a school's best 3 duos per mode count, for the regular season and for the Finals separately. A school can't win just by entering the most teams.
+- **Depth cap** - Each school's best 5 duos per mode count, for the regular season and for the Finals separately. Most schools have 5 or fewer duos per mode, so all of their qualifying duos count. A school can't win just by entering the most teams.
+- **How the cap is set** - The cap equals the league average number of duos competing per school in each mode, rounded to the nearest whole number. A duo has competed in a mode if it submitted at least one result in that mode. For 2026: Battle Royale 86 duos across 17 schools (5.06) and Zero Build 98 duos across 20 schools (4.90), so the cap is 5. It is recalculated once after the roster deadline and then stays fixed for the season.
 - **Both modes count** - A duo that qualifies in both Battle Royale and Zero Build can earn points, and Finals berths, in each mode
 - **Eligibility** - A school must have at least one duo in the Finals (either mode) to win the trophy
 - **Tiebreakers** - More Finals berths first, then the higher-scoring single duo
@@ -62,7 +63,7 @@ The School Cup rewards the school with the deepest Fortnite program across the r
 **On the dashboard:**
 - **Leader card** - Current Cup leader, point total, and lead over 2nd place
 - **Standings table** - Battle Royale season points, Zero Build season points, Finals points, total, Finals berths, and eligibility status. Ineligible schools are grayed out.
-- **Point breakdown** - Click any school to see which duos are scoring and how many points each earned. Duos outside a school's best 3 are shown as "not counted".
+- **Point breakdown** - Click any school to see which duos are scoring and how many points each earned. Duos outside a school's best 5 are shown as "not counted".
 - **Rules box** - "How School Cup points work" explains the scoring on the page itself
 
 ### Filtering & Analysis
@@ -161,7 +162,7 @@ All league rules are settings near the top of the dashboard's script. Change the
 - `PREVIEW_RANKS = 50` - Ranks shown in the collapsed Season Standings view
 - `FINALS_DATE_STRING = '2026-11-07'` - Matches on or after this date count as Finals
 - `FINALS_COUNTING_MATCHES = 3` - Best Finals matches added together for the Finals score
-- `CUP_DUOS_PER_MODE = 3` - Duos per school that score in each mode for the School Cup
+- `CUP_DUOS_PER_MODE = 5` - Duos per school that score in each mode for the School Cup (league average of duos competing per school per mode, rounded)
 - `FINALS_CUP_MULTIPLIER = 1.5` - How much Finals points are worth compared to regular-season points
 - `MIN_ACCURACY_MATCHES = 3` - Matches with accuracy data needed to appear on the accuracy leaderboard
 
@@ -234,7 +235,7 @@ For technical support or feature requests, contact the KSEL leadership team.
 
 ## Version History
 
-- v3.0 (2026 season): Duos format; best 4 matches (minimum 4) for qualification; top 50 per mode make the Finals; top 50 standings view; Finals stage with automatic Finals-date detection; School Cup traveling trophy standings with projected tally; player leaderboards (eliminations, damage, accuracy); School Performance table; school names in standings; Last Updated time; filters now apply to all sections below them
+- v3.0 (2026 season): Duos format; best 4 matches (minimum 4) for qualification; top 50 per mode make the Finals; top 50 standings view; Finals stage with automatic Finals-date detection; School Cup traveling trophy standings with projected tally (best 5 duos per mode, based on the league average); player leaderboards (eliminations, damage, accuracy); School Performance table; school names in standings; Last Updated time; filters now apply to all sections below them
 - v2.0: Added Grand Championship standings with top 3 of 4 scoring format
 - v1.0: Initial release with season analytics dashboard
 
