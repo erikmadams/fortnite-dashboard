@@ -332,8 +332,12 @@
         const FINALS_DATE_STRING = '2026-11-07';
         // Finals score = sum of a duo's best N Finals matches (per mode)
         const FINALS_COUNTING_MATCHES = 3;
-        // School Cup: how many of a school's duos score in each mode (regular season and Finals each)
-        const CUP_DUOS_PER_MODE = 3;
+        // School Cup: how many of a school's duos score in each mode (regular season and Finals each).
+        // Set to the league average number of duos competing per school in each mode, rounded to the
+        // nearest whole number. A duo "competed" in a mode if it submitted at least one result in that mode.
+        // 2026 (as of 10/7): Battle Royale 86 duos / 17 schools = 5.06; Zero Build 98 duos / 20 schools = 4.90
+        // Recalculate once after the roster deadline, then keep it fixed for the rest of the season.
+        const CUP_DUOS_PER_MODE = 5;
         // School Cup: Finals points are worth this many times regular-season points
         const FINALS_CUP_MULTIPLIER = 1.5;
         const CUP_MODES = ['Battle Royale', 'Zero Build'];
@@ -916,7 +920,7 @@
                 <li><b>Regular season:</b> each duo that makes the Finals earns points by its Finals seed in its mode: 1st seed = ${FINALS_SPOTS} pts, ${FINALS_SPOTS}th seed = 1 pt.</li>
                 <li><b>Projected tally:</b> until the regular season ends, every duo currently ranked in the top ${FINALS_SPOTS} of its mode scores by its current rank, even before playing ${QUALIFYING_MATCHES} matches (marked <i>provisional</i>). Points lock in to official Finals seeds on ${formatFinalsDate()}.</li>
                 <li><b>Finals (${formatFinalsDate()}):</b> each duo earns points by Finals placement (best ${FINALS_COUNTING_MATCHES} matches added together), worth ${FINALS_CUP_MULTIPLIER}×: 1st = ${formatCupPoints(FINALS_SPOTS * FINALS_CUP_MULTIPLIER)} pts.</li>
-                <li><b>Depth:</b> only a school's best ${CUP_DUOS_PER_MODE} duos per mode count, for both the regular season and the Finals, so a school can't win just by entering the most teams.</li>
+                <li><b>Depth:</b> each school's best ${CUP_DUOS_PER_MODE} duos per mode count, for both the regular season and the Finals. ${CUP_DUOS_PER_MODE} is the league average number of duos competing per school in each mode, so depth is rewarded without a school winning just by entering the most teams.</li>
                 <li><b>Eligibility:</b> a school needs at least one duo in the Finals (either mode) to win the trophy.</li>
                 <li><b>Tiebreakers:</b> more Finals berths, then the higher-scoring single duo.</li>`;
 
