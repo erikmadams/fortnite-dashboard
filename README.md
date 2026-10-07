@@ -6,7 +6,6 @@ A comprehensive web-based analytics dashboard for tracking Kern Scholastic Espor
 
 **Students and Coaches:**
 - **Season Leaderboard**: [KSEL Fortnite Leaderboard](https://erikmadams.github.io/fortnite-dashboard/)
-- **Grand Championship Standings**: [KSEL Grand Championship](https://erikmadams.github.io/fortnite-dashboard/grand-championship-standings.html)
 
 ## 2026 Season Format
 
