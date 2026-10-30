@@ -24,6 +24,7 @@
                     <h1 class="text-3xl font-bold text-gray-800">Team Analytics Dashboard</h1>
                     <p class="text-gray-600">Performance tracking and statistics</p>
                     <p class="text-xs text-gray-500 mt-1 inline-flex items-center gap-1"><i data-lucide="clock" class="w-3 h-3"></i><span id="lastUpdated">Last updated: loading...</span></p>
+                    <p class="text-xs text-gray-400" id="lastChecked"></p>
                 </div>
                 
                 <div class="flex gap-2">
@@ -345,6 +346,19 @@
         const FINALS_DATE = parseLocalDate(FINALS_DATE_STRING);
         let currentStandingsStage = 'Regular Season';
 
+        // ===== LIVE UPDATES =====
+        // The page re-checks the sheet this often and redraws only if the data changed.
+        // Note: Google's "Publish to web" CSV can lag the live sheet by up to ~5 minutes.
+        const AUTO_REFRESH_MINUTES = 2;
+        let lastCsvText = '';
+        let refreshInFlight = false;
+        let autoRefreshTimer = null;
+        // Filters as of the last "Apply" click, so background refreshes keep the same view
+        let appliedFilters = { school: '', team: '', mode: '' };
+        // Once someone picks a Stage, background refreshes leave it alone
+        let stageChosenByUser = false;
+        let sawFinalsResults = false;
+
         document.addEventListener('DOMContentLoaded', function() {
             console.log('DOM Content Loaded');
             lucide.createIcons();
@@ -377,6 +391,9 @@
             // Reset standings view
             isStandingsExpanded = false;
             currentStandingsGameMode = 'Battle Royale';
+            appliedFilters = { school: '', team: '', mode: '' };
+            stageChosenByUser = false;
+            sawFinalsResults = false;
             
             // Destroy existing chart if it exists
             if (window.performanceChart instanceof Chart) {
@@ -386,78 +403,116 @@
             loadRealData();
         }
 
-        async function loadRealData() {
+        // Fetches the published CSV: CORS proxy first, then a direct request as a fallback
+        async function fetchSheetCsv() {
             try {
-                console.log('Fetching data from Google Sheets...');
-                
-                // Use CORS proxy directly since it works
                 const proxyUrl = 'https://api.allorigins.win/raw?url=';
-                const targetUrl = encodeURIComponent(SHEET_CSV_URL);
-                
-                const response = await fetch(proxyUrl + targetUrl);
-                
-                if (!response.ok) {
-                    throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                }
-                
-                const csvText = await response.text();
-                console.log('CSV data received, parsing...');
-                
-                parseCSVData(csvText);
-                
-                console.log('Generated', allData.length, 'games for', [...new Set(allData.map(d => d.teamKey))].length, 'teams');
-                
-                filteredData = [...allData];
-                
-                console.log('=== CALLING UPDATE FUNCTIONS ===');
-                populateFilters();
-                updateStandings();
-                updateSchoolCup();
-                updateLeaderboards();
-                updateTeamStats();
-                updateRecentGames();
-                updateChart();
-                console.log('=== REAL DATA LOAD COMPLETE ===');
-                
+                // Cache-buster so the proxy doesn't hand back an old copy
+                const targetUrl = encodeURIComponent(SHEET_CSV_URL + '&cb=' + Date.now());
+                const response = await fetch(proxyUrl + targetUrl, { cache: 'no-store' });
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                return await response.text();
             } catch (error) {
                 console.error('CORS proxy failed:', error);
                 console.log('Trying direct method...');
-                
-                // Fallback to direct method
-                try {
-                    const response = await fetch(SHEET_CSV_URL, {
-                        method: 'GET',
-                        mode: 'cors',
-                        headers: {
-                            'Accept': 'text/csv,text/plain,*/*'
-                        }
-                    });
-                    
-                    if (response.ok) {
-                        const csvText = await response.text();
-                        console.log('Direct method successful, parsing CSV data...');
-                        parseCSVData(csvText);
-                        
-                        filteredData = [...allData];
-                        
-                        populateFilters();
-                        updateStandings();
-                        updateSchoolCup();
-                        updateLeaderboards();
-                        updateTeamStats();
-                        updateRecentGames();
-                        updateChart();
-                        console.log('=== DIRECT DATA LOAD COMPLETE ===');
-                        
-                    } else {
-                        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
-                    }
-                    
-                } catch (directError) {
-                    console.error('Both methods failed:', directError);
-                    console.log('Data load failed, check your Google Sheets CSV URL and permissions');
-                }
+                const response = await fetch(SHEET_CSV_URL, {
+                    method: 'GET',
+                    mode: 'cors',
+                    cache: 'no-store',
+                    headers: { 'Accept': 'text/csv,text/plain,*/*' }
+                });
+                if (!response.ok) throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+                return await response.text();
             }
+        }
+
+        function renderAll() {
+            updateStandings();
+            updateSchoolCup();
+            updateLeaderboards();
+            updateTeamStats();
+            updateRecentGames();
+            updateChart();
+        }
+
+        async function loadRealData() {
+            try {
+                console.log('Fetching data from Google Sheets...');
+                const csvText = await fetchSheetCsv();
+                lastCsvText = csvText;
+                parseCSVData(csvText);
+
+                console.log('Generated', allData.length, 'games for', [...new Set(allData.map(d => d.teamKey))].length, 'teams');
+
+                filteredData = [...allData];
+                populateFilters();
+                renderAll();
+                markChecked();
+                startAutoRefresh();
+                console.log('=== REAL DATA LOAD COMPLETE ===');
+            } catch (error) {
+                console.error('Both methods failed:', error);
+                console.log('Data load failed, check your Google Sheets CSV URL and permissions');
+            }
+        }
+
+        // ===== LIVE UPDATES =====
+        function startAutoRefresh() {
+            if (autoRefreshTimer) return;
+            autoRefreshTimer = setInterval(backgroundRefresh, AUTO_REFRESH_MINUTES * 60 * 1000);
+            // Catch up right away when someone comes back to a tab that was in the background
+            document.addEventListener('visibilitychange', () => {
+                if (!document.hidden) backgroundRefresh();
+            });
+        }
+
+        function markChecked() {
+            const el = document.getElementById('lastChecked');
+            if (el) el.textContent = `Checked ${new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}, refreshes every ${AUTO_REFRESH_MINUTES} min`;
+        }
+
+        // Re-reads the sheet without resetting filters, the Stage/Mode picks or the expanded view.
+        // Standings, Finals seeds and the School Cup are recalculated from scratch, so any score
+        // change moves duos in or out of the top FINALS_SPOTS automatically.
+        async function backgroundRefresh() {
+            if (refreshInFlight || document.hidden || !lastCsvText) return;
+            refreshInFlight = true;
+            try {
+                const csvText = await fetchSheetCsv();
+                markChecked();
+                if (csvText === lastCsvText) return;
+                lastCsvText = csvText;
+                console.log('Sheet changed, refreshing dashboard...');
+
+                const schoolSel = document.getElementById('schoolFilter').value;
+                const teamSel = document.getElementById('teamFilter').value;
+                const modeSel = document.getElementById('gameModeFilter').value;
+
+                parseCSVData(csvText);
+                populateFilters();
+                restoreSelect('schoolFilter', schoolSel);
+                fillTeamOptions(document.getElementById('schoolFilter').value);
+                restoreSelect('teamFilter', teamSel);
+                restoreSelect('gameModeFilter', modeSel);
+
+                filteredData = allData.filter(row => rowMatchesFilters(row, appliedFilters));
+                renderAll();
+            } catch (error) {
+                console.warn('Background refresh failed, will try again next cycle:', error);
+            } finally {
+                refreshInFlight = false;
+            }
+        }
+
+        function restoreSelect(id, value) {
+            const el = document.getElementById(id);
+            if ([...el.options].some(o => o.value === value)) el.value = value;
+        }
+
+        function rowMatchesFilters(row, f) {
+            return (!f.school || row.school === f.school) &&
+                (!f.team || row.teamKey === f.team) &&
+                (!f.mode || row.gameMode === f.mode);
         }
 
         function parseCSVData(csvText) {
@@ -514,10 +569,15 @@
             console.log('Parsed', allData.length, 'valid game records');
             updateLastUpdated();
 
-            // Once Finals results exist, open Season Standings on the Finals view
-            currentStandingsStage = allData.some(r => r.isFinals) ? 'Finals' : 'Regular Season';
-            const stageSelect = document.getElementById('standingsStageFilter');
-            if (stageSelect) stageSelect.value = currentStandingsStage;
+            // Once Finals results exist, open Season Standings on the Finals view. Background refreshes
+            // keep whatever Stage someone picked, except they switch to Finals when the first Finals result lands.
+            const hasFinalsResults = allData.some(r => r.isFinals);
+            if (!stageChosenByUser || (hasFinalsResults && !sawFinalsResults)) {
+                currentStandingsStage = hasFinalsResults ? 'Finals' : 'Regular Season';
+                const stageSelect = document.getElementById('standingsStageFilter');
+                if (stageSelect) stageSelect.value = currentStandingsStage;
+            }
+            sawFinalsResults = hasFinalsResults;
         }
 
         function parseCSVLine(line) {
@@ -681,14 +741,19 @@
         function updateStandingsForGameMode() {
             currentStandingsGameMode = document.getElementById('standingsGameModeFilter').value;
             currentStandingsStage = document.getElementById('standingsStageFilter').value;
+            stageChosenByUser = true;
             updateStandings();
         }
+
+        let finalsShowingSeeds = false;
 
         function updateStandings() {
             const standings = currentStandingsStage === 'Finals'
                 ? calculateFinalsStandings(currentStandingsGameMode)
                 : calculateTeamStandings(currentStandingsGameMode);
             console.log('Standings:', currentStandingsStage, currentStandingsGameMode, standings.length, 'teams');
+            // Finals view before any Finals results: the field is shown in seed order
+            finalsShowingSeeds = currentStandingsStage === 'Finals' && standings.length > 0 && standings[0].showingSeeds;
             updateStandingsNote();
             updateTop30Standings(standings.slice(0, PREVIEW_RANKS));
             updateAllStandings(standings);
@@ -698,10 +763,14 @@
             const title = document.getElementById('standingsNoteTitle');
             const text = document.getElementById('standingsNoteText');
             const sub = document.getElementById('standingsNoteSub');
-            if (currentStandingsStage === 'Finals') {
+            if (currentStandingsStage === 'Finals' && finalsShowingSeeds) {
+                title.textContent = 'Finals Field:';
+                text.textContent = `The top ${FINALS_SPOTS} qualified ${currentStandingsGameMode} duos, seeded by regular-season qualification score (avg of best ${QUALIFYING_MATCHES}). Seeds update automatically as new results are posted, until Finals on ${formatFinalsDate()}.`;
+                sub.textContent = `Once Finals results are posted, duos are ranked by their best ${FINALS_COUNTING_MATCHES} Finals matches added together.`;
+            } else if (currentStandingsStage === 'Finals') {
                 title.textContent = 'Finals Scoring:';
                 text.textContent = `Finals are played on ${formatFinalsDate()}. Each duo's best ${FINALS_COUNTING_MATCHES} Finals matches are added together; the highest total wins the mode.`;
-                sub.textContent = 'Only matches dated on or after the Finals date count here.';
+                sub.textContent = `Only matches dated on or after the Finals date count here. Duos without a Finals result yet are listed after, in seed order.`;
             } else {
                 title.textContent = 'Finals Qualification:';
                 text.textContent = `Duos must play at least ${QUALIFYING_MATCHES} matches. The top ${FINALS_SPOTS} qualified duos in each mode (Battle Royale and Zero Build), by avg of their best ${QUALIFYING_MATCHES} scores, make the Finals.`;
@@ -774,8 +843,18 @@
             return results;
         }
 
-        // Finals standings for one mode: sum of each duo's best FINALS_COUNTING_MATCHES Finals matches
+        // Finals field + standings for one mode.
+        // The field is the top FINALS_SPOTS qualified duos from the regular season (seeds 1 to FINALS_SPOTS),
+        // recalculated from live data on every load/refresh, so seeds move whenever a regular-season score changes.
+        // Before any Finals results: the field is listed in seed order with regular-season stats.
+        // After: duos are ranked by the sum of their best FINALS_COUNTING_MATCHES Finals matches; field duos
+        // with no Finals result yet follow in seed order. A duo that posts Finals results without being in the
+        // field is still listed, flagged "Not in Finals field", so entry mistakes are easy to spot.
         function calculateFinalsStandings(mode = currentStandingsGameMode) {
+            const field = calculateTeamStandings(mode).filter(t => t.makesFinals);
+            const fieldByKey = {};
+            field.forEach(t => { fieldByKey[t.teamKey] = t; });
+
             const teamStats = {};
             allData.filter(row => row.isFinals && modeMatches(row, mode)).forEach(row => {
                 if (!teamStats[row.teamKey]) {
@@ -791,22 +870,47 @@
                 t.totalElims += row.totalEliminations;
             });
 
-            return Object.entries(teamStats)
-                .map(([key, t]) => ({
-                    team: t.teamName,
-                    teamKey: key,
-                    school: t.school,
-                    qualificationScore: [...t.scores].sort((a, b) => b - a).slice(0, FINALS_COUNTING_MATCHES).reduce((a, b) => a + b, 0),
-                    totalPoints: t.totalPoints,
-                    games: t.games,
-                    wins: t.wins,
-                    top5s: t.top5s,
-                    totalElims: t.totalElims,
-                    isQualified: true,
-                    makesFinals: true
-                }))
-                // Ties on Finals score go to the higher total across all Finals matches
-                .sort((a, b) => b.qualificationScore - a.qualificationScore || b.totalPoints - a.totalPoints)
+            // No Finals results yet: show the field by seed, with regular-season numbers
+            if (Object.keys(teamStats).length === 0) {
+                return field.map(t => ({
+                    ...t,
+                    rank: t.finalsSeed,
+                    seed: t.finalsSeed,
+                    inField: true,
+                    playedFinals: false,
+                    showingSeeds: true
+                }));
+            }
+
+            const keys = new Set([...field.map(t => t.teamKey), ...Object.keys(teamStats)]);
+            return [...keys]
+                .map(key => {
+                    const f = fieldByKey[key];
+                    const t = teamStats[key];
+                    return {
+                        team: t ? t.teamName : f.team,
+                        teamKey: key,
+                        school: (t && t.school) || (f && f.school) || '',
+                        qualificationScore: t ? [...t.scores].sort((a, b) => b - a).slice(0, FINALS_COUNTING_MATCHES).reduce((a, b) => a + b, 0) : 0,
+                        totalPoints: t ? t.totalPoints : 0,
+                        games: t ? t.games : 0,
+                        wins: t ? t.wins : 0,
+                        top5s: t ? t.top5s : 0,
+                        totalElims: t ? t.totalElims : 0,
+                        seed: f ? f.finalsSeed : null,
+                        inField: !!f,
+                        playedFinals: !!t,
+                        isQualified: !!f,
+                        makesFinals: !!f,
+                        showingSeeds: false
+                    };
+                })
+                // Duos with Finals results first (score, then total Finals points, then seed); the rest by seed
+                .sort((a, b) =>
+                    (b.playedFinals - a.playedFinals) ||
+                    (b.qualificationScore - a.qualificationScore) ||
+                    (b.totalPoints - a.totalPoints) ||
+                    ((a.seed || 999) - (b.seed || 999)))
                 .map((team, index) => ({ ...team, rank: index + 1 }));
         }
 
@@ -876,7 +980,7 @@
                 scoreGroup(regularEntries, mode);
 
                 const finalsEntries = finals
-                    .filter(t => t.school)
+                    .filter(t => t.school && t.playedFinals)
                     .map(t => ({
                         school: t.school, team: t.team, mode, stage: 'Finals',
                         place: t.rank, points: Math.max(0, FINALS_SPOTS + 1 - t.rank) * FINALS_CUP_MULTIPLIER
@@ -1045,12 +1149,12 @@
                                 <div class="flex flex-col min-w-0">
                                     <span class="font-medium text-gray-800 text-sm truncate" title="${escapeHtml(team.team)}">${escapeHtml(team.team)}</span>
                                     ${team.school ? `<span class="text-xs text-gray-500 truncate" title="${escapeHtml(team.school)}">${escapeHtml(team.school)}</span>` : ''}
-                                    ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified</span>' : ''}
+                                    ${statusLabel(team, false)}
                                 </div>
                             </div>
                             <div class="text-right shrink-0">
                                 <div class="font-bold text-gray-900 text-sm">${team.qualificationScore}</div>
-                                <div class="text-xs text-gray-500">${team.games} games</div>
+                                <div class="text-xs text-gray-500">${team.games} ${currentStandingsStage === 'Finals' && !finalsShowingSeeds ? 'Finals games' : 'games'}</div>
                             </div>
                         </div>
                     `).join('')}
@@ -1070,7 +1174,7 @@
                         <span>Team / School</span>
                     </div>
                     <div class="flex items-center text-xs">
-                        <span class="font-semibold w-24 text-center">${currentStandingsStage === 'Finals' ? 'Finals Score' : 'Qual. Score'}</span>
+                        <span class="font-semibold w-24 text-center">${currentStandingsStage === 'Finals' && !finalsShowingSeeds ? 'Finals Score' : 'Qual. Score'}</span>
                         <span class="text-gray-600 w-20 text-center">Total Points</span>
                         <span class="text-gray-600 w-12 text-center">Games</span>
                         <span class="text-gray-600 w-12 text-center">Wins</span>
@@ -1095,7 +1199,7 @@
                                 <div class="flex flex-col">
                                     <span class="font-medium text-gray-800">${team.team}</span>
                                     ${team.school ? `<span class="text-xs text-gray-500">${team.school}</span>` : ''}
-                                    ${!team.isQualified ? '<span class="text-xs text-orange-600 font-medium">Not Qualified (needs ${QUALIFYING_MATCHES} games)</span>' : ''}
+                                    ${statusLabel(team, true)}
                                 </div>
                             </div>
                             <div class="flex items-center text-sm">
@@ -1110,6 +1214,17 @@
                     `).join('')}
                 </div>
             `;
+        }
+
+        // Line under a team name: seed in the Finals view, qualification warnings in the regular season
+        function statusLabel(team, long) {
+            if (currentStandingsStage === 'Finals') {
+                if (!team.inField) return '<span class="text-xs text-orange-600 font-medium">Not in Finals field</span>';
+                if (finalsShowingSeeds) return '';
+                return `<span class="text-xs text-blue-700 font-medium">Seed #${team.seed}${team.playedFinals ? '' : ', no Finals games yet'}</span>`;
+            }
+            if (team.isQualified) return '';
+            return `<span class="text-xs text-orange-600 font-medium">${long ? `Not Qualified (needs ${QUALIFYING_MATCHES} games)` : 'Not Qualified'}</span>`;
         }
 
         function getRankingStyling(team) {
@@ -1539,13 +1654,8 @@
             
             console.log('Filter values:', { schoolFilter, teamFilter, gameModeFilter });
             
-            filteredData = allData.filter(row => {
-                const matchesSchool = !schoolFilter || row.school === schoolFilter;
-                const matchesTeam = !teamFilter || row.teamKey === teamFilter;
-                const matchesMode = !gameModeFilter || row.gameMode === gameModeFilter;
-                
-                return matchesSchool && matchesTeam && matchesMode;
-            });
+            appliedFilters = { school: schoolFilter, team: teamFilter, mode: gameModeFilter };
+            filteredData = allData.filter(row => rowMatchesFilters(row, appliedFilters));
             
             console.log('Filtered to', filteredData.length, 'games');
             
