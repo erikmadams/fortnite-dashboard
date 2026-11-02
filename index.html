@@ -331,6 +331,9 @@
         // ===== FINALS & SCHOOL CUP SETTINGS =====
         // Matches dated on or after this day count as Finals; everything before is regular season
         const FINALS_DATE_STRING = '2026-11-07';
+        // Day after the last regular-season match. From this date the School Cup stops projecting
+        // and uses official Finals seeds (qualified duos only).
+        const REGULAR_SEASON_END_STRING = '2026-10-30';
         // Finals score = sum of a duo's best N Finals matches (per mode)
         const FINALS_COUNTING_MATCHES = 3;
         // School Cup: how many of a school's duos score in each mode (regular season and Finals each).
@@ -817,6 +820,7 @@
                         teamKey: key,
                         school: stats.school,
                         qualificationScore: Math.round(qualificationScore * 10) / 10,
+                        exactScore: qualificationScore,
                         totalPoints: stats.totalPoints,
                         games: stats.games,
                         wins: stats.wins,
@@ -825,8 +829,15 @@
                         isQualified: stats.games >= QUALIFYING_MATCHES
                     };
                 })
-                .sort((a, b) => b.qualificationScore - a.qualificationScore)
+                .sort((a, b) => b.exactScore - a.exactScore)
                 .map((team, index) => ({ ...team, rank: index + 1 }));
+
+            // Tied duos (exactly the same qualification score) share the higher position for School Cup points
+            const SCORE_EPS = 1e-9;
+            results.forEach((team, i) => {
+                const prev = results[i - 1];
+                team.tiedRank = (prev && Math.abs(prev.exactScore - team.exactScore) < SCORE_EPS) ? prev.tiedRank : team.rank;
+            });
 
             // Top FINALS_SPOTS teams among those that have played enough matches make the Finals.
             // finalsSeed = position among Finals qualifiers (1 to FINALS_SPOTS)
@@ -838,6 +849,12 @@
                     finalsCount++;
                     team.finalsSeed = finalsCount;
                 }
+            });
+            // cupSeed = shared seed for duos tied on qualification score (used for School Cup points)
+            let prevFinalist = null;
+            results.filter(t => t.makesFinals).forEach(t => {
+                t.cupSeed = (prevFinalist && Math.abs(prevFinalist.exactScore - t.exactScore) < SCORE_EPS) ? prevFinalist.cupSeed : t.finalsSeed;
+                prevFinalist = t;
             });
 
             return results;
@@ -921,7 +938,8 @@
         function isCupProjected() {
             const today = new Date();
             const todayDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-            return !allData.some(r => r.isFinals) && todayDate < FINALS_DATE;
+            const seasonEnd = parseLocalDate(REGULAR_SEASON_END_STRING) || FINALS_DATE;
+            return !allData.some(r => r.isFinals) && todayDate < seasonEnd;
         }
 
         function calculateSchoolCup() {
@@ -970,20 +988,30 @@
                 const regularEntries = regular
                     .filter(t => t.school && (projected ? t.rank <= FINALS_SPOTS : t.makesFinals))
                     .map(t => {
-                        const place = projected ? t.rank : t.finalsSeed;
+                        const place = projected ? t.tiedRank : t.cupSeed;
+                        const ownPlace = projected ? t.rank : t.finalsSeed;
                         return {
                             school: t.school, team: t.team, mode, stage: 'Regular Season',
-                            place, points: FINALS_SPOTS + 1 - place, provisional: projected && !t.isQualified
+                            place, tied: place !== ownPlace || regular.some(o => o !== t && (projected ? o.tiedRank : o.cupSeed) === place && (projected ? o.rank <= FINALS_SPOTS : o.makesFinals)),
+                            points: FINALS_SPOTS + 1 - place, provisional: projected && !t.isQualified
                         };
                     });
                 regularEntries.forEach(e => getSchool(e.school).finalsBerths++);
                 scoreGroup(regularEntries, mode);
 
-                const finalsEntries = finals
-                    .filter(t => t.school && t.playedFinals)
+                // Duos tied on Finals score and total Finals points share the higher place
+                const played = finals.filter(t => t.playedFinals);
+                played.forEach((t, i) => {
+                    const p = played[i - 1];
+                    t.sharedPlace = (p && p.qualificationScore === t.qualificationScore && p.totalPoints === t.totalPoints) ? p.sharedPlace : t.rank;
+                });
+                const finalsEntries = played
+                    .filter(t => t.school)
                     .map(t => ({
                         school: t.school, team: t.team, mode, stage: 'Finals',
-                        place: t.rank, points: Math.max(0, FINALS_SPOTS + 1 - t.rank) * FINALS_CUP_MULTIPLIER
+                        place: t.sharedPlace,
+                        tied: played.some(o => o !== t && o.sharedPlace === t.sharedPlace),
+                        points: Math.max(0, FINALS_SPOTS + 1 - t.sharedPlace) * FINALS_CUP_MULTIPLIER
                     }));
                 scoreGroup(finalsEntries, 'Finals');
             });
@@ -1022,7 +1050,8 @@
             // Rules (built from the settings so they always match the math)
             document.getElementById('cupRules').innerHTML = `
                 <li><b>Regular season:</b> each duo that makes the Finals earns points by its Finals seed in its mode: 1st seed = ${FINALS_SPOTS} pts, ${FINALS_SPOTS}th seed = 1 pt.</li>
-                <li><b>Projected tally:</b> until the regular season ends, every duo currently ranked in the top ${FINALS_SPOTS} of its mode scores by its current rank, even before playing ${QUALIFYING_MATCHES} matches (marked <i>provisional</i>). Points lock in to official Finals seeds on ${formatFinalsDate()}.</li>
+                <li><b>Projected tally:</b> until the regular season ends, every duo currently ranked in the top ${FINALS_SPOTS} of its mode scores by its current rank, even before playing ${QUALIFYING_MATCHES} matches (marked <i>provisional</i>). Points lock in to official Finals seeds when the regular season ends.</li>
+                <li><b>Ties:</b> duos with exactly the same qualification score share the higher seed's points (shown as "T", e.g. Seed #T8). At the Finals, duos tied on both their best-${FINALS_COUNTING_MATCHES} total and total Finals points share the higher place's points.</li>
                 <li><b>Finals (${formatFinalsDate()}):</b> each duo earns points by Finals placement (best ${FINALS_COUNTING_MATCHES} matches added together), worth ${FINALS_CUP_MULTIPLIER}×: 1st = ${formatCupPoints(FINALS_SPOTS * FINALS_CUP_MULTIPLIER)} pts.</li>
                 <li><b>Depth:</b> each school's best ${CUP_DUOS_PER_MODE} duos per mode count, for both the regular season and the Finals. ${CUP_DUOS_PER_MODE} is the league average number of duos competing per school in each mode, so depth is rewarded without a school winning just by entering the most teams.</li>
                 <li><b>Eligibility:</b> a school needs at least one duo in the Finals (either mode) to win the trophy.</li>
@@ -1065,7 +1094,7 @@
                 if (items.length === 0) return '<div class="text-xs text-gray-400">None</div>';
                 return items.map(e => `
                     <div class="flex justify-between gap-2 text-xs ${e.counted ? 'text-gray-800' : 'text-gray-400'}">
-                        <span class="truncate">${escapeHtml(e.team)} <span class="text-gray-500">(${e.stage === 'Finals' ? 'Finals #' : projected ? 'Rank #' : 'Seed #'}${e.place}${e.provisional ? ', provisional' : ''})</span></span>
+                        <span class="truncate">${escapeHtml(e.team)} <span class="text-gray-500">(${e.stage === 'Finals' ? 'Finals #' : projected ? 'Rank #' : 'Seed #'}${e.tied ? 'T' : ''}${e.place}${e.provisional ? ', provisional' : ''})</span></span>
                         <span class="shrink-0 font-medium">${e.counted ? formatCupPoints(e.points) : 'not counted'}</span>
                     </div>`).join('');
             };
