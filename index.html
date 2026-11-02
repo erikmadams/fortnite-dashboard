@@ -856,6 +856,12 @@
                 t.cupSeed = (prevFinalist && Math.abs(prevFinalist.exactScore - t.exactScore) < SCORE_EPS) ? prevFinalist.cupSeed : t.finalsSeed;
                 prevFinalist = t;
             });
+            // What the standings board shows: shared rank with a "T" when tied
+            markTies(results, 'tiedRank');
+            const finalists = results.filter(t => t.makesFinals);
+            const seedCounts = {};
+            finalists.forEach(t => { seedCounts[t.cupSeed] = (seedCounts[t.cupSeed] || 0) + 1; });
+            finalists.forEach(t => { t.seedTied = seedCounts[t.cupSeed] > 1; });
 
             return results;
         }
@@ -867,6 +873,19 @@
         // After: duos are ranked by the sum of their best FINALS_COUNTING_MATCHES Finals matches; field duos
         // with no Finals result yet follow in seed order. A duo that posts Finals results without being in the
         // field is still listed, flagged "Not in Finals field", so entry mistakes are easy to spot.
+        // Sets displayRank / rankTied on each team from a shared-rank field (e.g. tiedRank)
+        function markTies(list, field) {
+            const counts = {};
+            list.forEach(t => { counts[t[field]] = (counts[t[field]] || 0) + 1; });
+            list.forEach(t => { t.displayRank = t[field]; t.rankTied = counts[t[field]] > 1; });
+        }
+
+        // Rank shown in a standings badge: "T8" for a shared rank, "8" otherwise
+        function rankLabel(team) {
+            const r = team.displayRank != null ? team.displayRank : team.rank;
+            return (team.rankTied ? 'T' : '') + r;
+        }
+
         function calculateFinalsStandings(mode = currentStandingsGameMode) {
             const field = calculateTeamStandings(mode).filter(t => t.makesFinals);
             const fieldByKey = {};
@@ -892,7 +911,10 @@
                 return field.map(t => ({
                     ...t,
                     rank: t.finalsSeed,
-                    seed: t.finalsSeed,
+                    seed: t.cupSeed,
+                    seedTied: t.seedTied,
+                    displayRank: t.cupSeed,
+                    rankTied: t.seedTied,
                     inField: true,
                     playedFinals: false,
                     showingSeeds: true
@@ -900,7 +922,7 @@
             }
 
             const keys = new Set([...field.map(t => t.teamKey), ...Object.keys(teamStats)]);
-            return [...keys]
+            const results = [...keys]
                 .map(key => {
                     const f = fieldByKey[key];
                     const t = teamStats[key];
@@ -914,7 +936,8 @@
                         wins: t ? t.wins : 0,
                         top5s: t ? t.top5s : 0,
                         totalElims: t ? t.totalElims : 0,
-                        seed: f ? f.finalsSeed : null,
+                        seed: f ? f.cupSeed : null,
+                        seedTied: f ? f.seedTied : false,
                         inField: !!f,
                         playedFinals: !!t,
                         isQualified: !!f,
@@ -929,6 +952,15 @@
                     (b.totalPoints - a.totalPoints) ||
                     ((a.seed || 999) - (b.seed || 999)))
                 .map((team, index) => ({ ...team, rank: index + 1 }));
+
+            // Duos tied on Finals score and total Finals points share the higher place
+            const played = results.filter(t => t.playedFinals);
+            played.forEach((t, i) => {
+                const p = played[i - 1];
+                t.sharedPlace = (p && p.qualificationScore === t.qualificationScore && p.totalPoints === t.totalPoints) ? p.sharedPlace : t.rank;
+            });
+            markTies(played, 'sharedPlace');
+            return results;
         }
 
         // ===== SCHOOL CUP =====
@@ -1172,8 +1204,8 @@
                     ${column.map(team => `
                         <div class="flex items-center justify-between gap-2 p-2 rounded-lg transition-colors ${getRankingStyling(team)}">
                             <div class="flex items-center gap-2 min-w-0">
-                                <span class="w-6 h-6 shrink-0 rounded-full ${getRankBadgeColor(team)} text-white text-xs font-bold flex items-center justify-center">
-                                    ${team.rank}
+                                <span class="min-w-[1.5rem] px-1 h-6 shrink-0 rounded-full ${getRankBadgeColor(team)} text-white text-xs font-bold flex items-center justify-center" title="${team.rankTied ? 'Tied' : ''}">
+                                    ${rankLabel(team)}
                                 </span>
                                 <div class="flex flex-col min-w-0">
                                     <span class="font-medium text-gray-800 text-sm truncate" title="${escapeHtml(team.team)}">${escapeHtml(team.team)}</span>
@@ -1222,8 +1254,8 @@
                         </div>` : ''}
                         <div class="flex items-center justify-between p-2 rounded-lg hover:bg-gray-50 transition-colors ${!team.isQualified ? 'bg-orange-50' : ''}">
                             <div class="flex items-center gap-3">
-                                <span class="w-8 h-6 rounded ${getRankBadgeColor(team)} text-white text-xs font-bold flex items-center justify-center">
-                                    ${team.rank}
+                                <span class="w-10 h-6 rounded ${getRankBadgeColor(team)} text-white text-xs font-bold flex items-center justify-center">
+                                    ${rankLabel(team)}
                                 </span>
                                 <div class="flex flex-col">
                                     <span class="font-medium text-gray-800">${team.team}</span>
@@ -1250,7 +1282,7 @@
             if (currentStandingsStage === 'Finals') {
                 if (!team.inField) return '<span class="text-xs text-orange-600 font-medium">Not in Finals field</span>';
                 if (finalsShowingSeeds) return '';
-                return `<span class="text-xs text-blue-700 font-medium">Seed #${team.seed}${team.playedFinals ? '' : ', no Finals games yet'}</span>`;
+                return `<span class="text-xs text-blue-700 font-medium">Seed #${team.seedTied ? 'T' : ''}${team.seed}${team.playedFinals ? '' : ', no Finals games yet'}</span>`;
             }
             if (team.isQualified) return '';
             return `<span class="text-xs text-orange-600 font-medium">${long ? `Not Qualified (needs ${QUALIFYING_MATCHES} games)` : 'Not Qualified'}</span>`;
