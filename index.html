@@ -335,7 +335,15 @@
         // and uses official Finals seeds (qualified duos only).
         const REGULAR_SEASON_END_STRING = '2026-10-30';
         // Finals score = sum of a duo's best N Finals matches (per mode)
-        const FINALS_COUNTING_MATCHES = 3;
+        const FINALS_COUNTING_MATCHES = 3;   // (no longer used for ranking; kept for reference)
+        // Finals day format (80-player lobby limit): the field is split into two heats by snake seeding
+        // (Heat A: seeds 1, 4, 5, 8, 9...; Heat B: seeds 2, 3, 6, 7, 10...). Each heat plays HEAT_MATCHES
+        // matches per mode; the top GRAND_FINAL_PER_HEAT duos from each heat by heat total play the Grand Final.
+        const HEAT_MATCHES = 3;
+        const GRAND_FINAL_PER_HEAT = 20;
+        // Grand Finalists drop their lowest heat match: final score = best (HEAT_MATCHES - 1) heat matches + Grand Final.
+        // The Grand Final always counts. The cut itself uses all HEAT_MATCHES heat matches.
+        const DROP_LOWEST_HEAT_FOR_GRAND_FINALISTS = true;
         // School Cup: how many of a school's duos score in each mode (regular season and Finals each).
         // Set to the league average number of duos competing per school in each mode, rounded to the
         // nearest whole number. A duo "competed" in a mode if it submitted at least one result in that mode.
@@ -769,11 +777,11 @@
             if (currentStandingsStage === 'Finals' && finalsShowingSeeds) {
                 title.textContent = 'Finals Field:';
                 text.textContent = `The top ${FINALS_SPOTS} qualified ${currentStandingsGameMode} duos, seeded by regular-season qualification score (avg of best ${QUALIFYING_MATCHES}). Seeds update automatically as new results are posted, until Finals on ${formatFinalsDate()}.`;
-                sub.textContent = `Once Finals results are posted, duos are ranked by their best ${FINALS_COUNTING_MATCHES} Finals matches added together.`;
+                sub.textContent = `Finals day: two heats of ${FINALS_SPOTS / 2} duos (snake seeding, shown under each duo). Each heat plays ${HEAT_MATCHES} matches; the top ${GRAND_FINAL_PER_HEAT} from each heat by heat total play the Grand Final.`;
             } else if (currentStandingsStage === 'Finals') {
                 title.textContent = 'Finals Scoring:';
-                text.textContent = `Finals are played on ${formatFinalsDate()}. Each duo's best ${FINALS_COUNTING_MATCHES} Finals matches are added together; the highest total wins the mode.`;
-                sub.textContent = `Only matches dated on or after the Finals date count here. Duos without a Finals result yet are listed after, in seed order.`;
+                text.textContent = `Heats: ${HEAT_MATCHES} matches; the top ${GRAND_FINAL_PER_HEAT} duos in each heat by heat total advance (ties: best single match, then total eliminations). Final standings: Grand Finalists by their best ${HEAT_MATCHES - 1} heat matches + Grand Final (lowest heat match dropped), then the remaining duos by heat total.`;
+                sub.textContent = `Only matches dated on or after ${formatFinalsDate()} count here. During the heats, duos are ranked by heat total so far.`;
             } else {
                 title.textContent = 'Finals Qualification:';
                 text.textContent = `Duos must play at least ${QUALIFYING_MATCHES} matches. The top ${FINALS_SPOTS} qualified duos in each mode (Battle Royale and Zero Build), by avg of their best ${QUALIFYING_MATCHES} scores, make the Finals.`;
@@ -886,13 +894,31 @@
             return (team.rankTied ? 'T' : '') + r;
         }
 
+        // Snake seeding: seeds 1, 4, 5, 8, 9... -> Heat A; seeds 2, 3, 6, 7, 10... -> Heat B
+        function heatForSeed(seed) {
+            if (!seed) return null;
+            const pair = Math.floor((seed - 1) / 2);
+            const first = (seed - 1) % 2 === 0;
+            return (pair % 2 === 0) === first ? 'A' : 'B';
+        }
+
+        function timestampValue(row) {
+            const d = new Date(row.timestamp);
+            return isNaN(d) ? 0 : d.getTime();
+        }
+
         function calculateFinalsStandings(mode = currentStandingsGameMode) {
             const field = calculateTeamStandings(mode).filter(t => t.makesFinals);
             const fieldByKey = {};
             field.forEach(t => { fieldByKey[t.teamKey] = t; });
 
+            // Heat assignment by snake seeding on the (unique) seed order
+            field.forEach(t => { t.heat = heatForSeed(t.finalsSeed); });
+
             const teamStats = {};
-            allData.filter(row => row.isFinals && modeMatches(row, mode)).forEach(row => {
+            allData.filter(row => row.isFinals && modeMatches(row, mode))
+                .slice().sort((a, b) => timestampValue(a) - timestampValue(b))
+                .forEach(row => {
                 if (!teamStats[row.teamKey]) {
                     teamStats[row.teamKey] = { teamName: row.teamName, school: row.school || '', scores: [], totalPoints: 0, games: 0, wins: 0, top5s: 0, totalElims: 0 };
                 }
@@ -915,6 +941,7 @@
                     seedTied: t.seedTied,
                     displayRank: t.cupSeed,
                     rankTied: t.seedTied,
+                    heat: t.heat,
                     inField: true,
                     playedFinals: false,
                     showingSeeds: true
@@ -926,11 +953,25 @@
                 .map(key => {
                     const f = fieldByKey[key];
                     const t = teamStats[key];
+                    // Matches in time order: the first HEAT_MATCHES are heat matches, anything after is the Grand Final
+                    const heatScores = t ? t.scores.slice(0, HEAT_MATCHES) : [];
+                    const heatTotal = heatScores.reduce((a, b) => a + b, 0);
+                    const grandFinalist = !!t && t.scores.length > HEAT_MATCHES;
+                    const grandFinalScores = t ? t.scores.slice(HEAT_MATCHES) : [];
+                    const droppedHeat = (grandFinalist && DROP_LOWEST_HEAT_FOR_GRAND_FINALISTS && heatScores.length) ? Math.min(...heatScores) : 0;
+                    const total = heatTotal - droppedHeat + grandFinalScores.reduce((a, b) => a + b, 0);
                     return {
                         team: t ? t.teamName : f.team,
                         teamKey: key,
                         school: (t && t.school) || (f && f.school) || '',
-                        qualificationScore: t ? [...t.scores].sort((a, b) => b - a).slice(0, FINALS_COUNTING_MATCHES).reduce((a, b) => a + b, 0) : 0,
+                        // Score shown: best 2 heat matches + Grand Final for Grand Finalists, heat total otherwise
+                        qualificationScore: grandFinalist ? total : heatTotal,
+                        droppedHeat,
+                        heatTotal,
+                        heatBest: heatScores.length ? Math.max(...heatScores) : 0,
+                        bestMatch: t && t.scores.length ? Math.max(...t.scores) : 0,
+                        grandFinalist,
+                        heat: f ? f.heat : null,
                         totalPoints: t ? t.totalPoints : 0,
                         games: t ? t.games : 0,
                         wins: t ? t.wins : 0,
@@ -945,21 +986,33 @@
                         showingSeeds: false
                     };
                 })
-                // Duos with Finals results first (score, then total Finals points, then seed); the rest by seed
+                // Grand Finalists first (heat total + Grand Final), then duos cut after the heats (heat total),
+                // then field duos with no Finals result yet (by seed). Ties: best single match, then total eliminations.
                 .sort((a, b) =>
+                    (b.grandFinalist - a.grandFinalist) ||
                     (b.playedFinals - a.playedFinals) ||
                     (b.qualificationScore - a.qualificationScore) ||
-                    (b.totalPoints - a.totalPoints) ||
+                    (b.bestMatch - a.bestMatch) ||
+                    (b.totalElims - a.totalElims) ||
                     ((a.seed || 999) - (b.seed || 999)))
                 .map((team, index) => ({ ...team, rank: index + 1 }));
 
-            // Duos tied on Finals score and total Finals points share the higher place
+            // Duos still tied after the tiebreakers share the higher place (and its School Cup points)
             const played = results.filter(t => t.playedFinals);
             played.forEach((t, i) => {
                 const p = played[i - 1];
-                t.sharedPlace = (p && p.qualificationScore === t.qualificationScore && p.totalPoints === t.totalPoints) ? p.sharedPlace : t.rank;
+                const same = p && p.grandFinalist === t.grandFinalist && p.qualificationScore === t.qualificationScore &&
+                    p.bestMatch === t.bestMatch && p.totalElims === t.totalElims;
+                t.sharedPlace = same ? p.sharedPlace : t.rank;
             });
             markTies(played, 'sharedPlace');
+
+            // Heat standings for the cut: within each heat, by heat total, then best heat match, then eliminations
+            ['A', 'B'].forEach(h => {
+                results.filter(t => t.heat === h && t.playedFinals)
+                    .sort((a, b) => (b.heatTotal - a.heatTotal) || (b.heatBest - a.heatBest) || (b.totalElims - a.totalElims))
+                    .forEach((t, i) => { t.heatRank = i + 1; t.advances = i < GRAND_FINAL_PER_HEAT; });
+            });
             return results;
         }
 
@@ -1031,12 +1084,8 @@
                 regularEntries.forEach(e => getSchool(e.school).finalsBerths++);
                 scoreGroup(regularEntries, mode);
 
-                // Duos tied on Finals score and total Finals points share the higher place
+                // Finals places come from the Finals standings (Grand Finalists 1-40, then duos cut after the heats)
                 const played = finals.filter(t => t.playedFinals);
-                played.forEach((t, i) => {
-                    const p = played[i - 1];
-                    t.sharedPlace = (p && p.qualificationScore === t.qualificationScore && p.totalPoints === t.totalPoints) ? p.sharedPlace : t.rank;
-                });
                 const finalsEntries = played
                     .filter(t => t.school)
                     .map(t => ({
@@ -1083,8 +1132,8 @@
             document.getElementById('cupRules').innerHTML = `
                 <li><b>Regular season:</b> each duo that makes the Finals earns points by its Finals seed in its mode: 1st seed = ${FINALS_SPOTS} pts, ${FINALS_SPOTS}th seed = 1 pt.</li>
                 <li><b>Projected tally:</b> until the regular season ends, every duo currently ranked in the top ${FINALS_SPOTS} of its mode scores by its current rank, even before playing ${QUALIFYING_MATCHES} matches (marked <i>provisional</i>). Points lock in to official Finals seeds when the regular season ends.</li>
-                <li><b>Ties:</b> duos with exactly the same qualification score share the higher seed's points (shown as "T", e.g. Seed #T8). At the Finals, duos tied on both their best-${FINALS_COUNTING_MATCHES} total and total Finals points share the higher place's points.</li>
-                <li><b>Finals (${formatFinalsDate()}):</b> each duo earns points by Finals placement (best ${FINALS_COUNTING_MATCHES} matches added together), worth ${FINALS_CUP_MULTIPLIER}×: 1st = ${formatCupPoints(FINALS_SPOTS * FINALS_CUP_MULTIPLIER)} pts.</li>
+                <li><b>Ties:</b> duos with exactly the same qualification score share the higher seed's points (shown as "T", e.g. Seed #T8). At the Finals, duos still tied after the tiebreakers (best single match, then total eliminations) share the higher place's points.</li>
+                <li><b>Finals (${formatFinalsDate()}):</b> each duo earns points by its final placement, worth ${FINALS_CUP_MULTIPLIER}×: 1st = ${formatCupPoints(FINALS_SPOTS * FINALS_CUP_MULTIPLIER)} pts. Grand Finalists take places 1–${GRAND_FINAL_PER_HEAT * 2} (best ${HEAT_MATCHES - 1} heat matches + Grand Final); duos cut after the heats take places ${GRAND_FINAL_PER_HEAT * 2 + 1}–${FINALS_SPOTS} (heat total).</li>
                 <li><b>Depth:</b> each school's best ${CUP_DUOS_PER_MODE} duos per mode count, for both the regular season and the Finals. ${CUP_DUOS_PER_MODE} is the league average number of duos competing per school in each mode, so depth is rewarded without a school winning just by entering the most teams.</li>
                 <li><b>Eligibility:</b> a school needs at least one duo in the Finals (either mode) to win the trophy.</li>
                 <li><b>Tiebreakers:</b> more Finals berths, then the higher-scoring single duo.</li>`;
@@ -1278,11 +1327,22 @@
         }
 
         // Line under a team name: seed in the Finals view, qualification warnings in the regular season
+        function ordinal(n) {
+            const s = ['th', 'st', 'nd', 'rd'], v = n % 100;
+            return n + (s[(v - 20) % 10] || s[v] || s[0]);
+        }
+
         function statusLabel(team, long) {
             if (currentStandingsStage === 'Finals') {
                 if (!team.inField) return '<span class="text-xs text-orange-600 font-medium">Not in Finals field</span>';
-                if (finalsShowingSeeds) return '';
-                return `<span class="text-xs text-blue-700 font-medium">Seed #${team.seedTied ? 'T' : ''}${team.seed}${team.playedFinals ? '' : ', no Finals games yet'}</span>`;
+                if (finalsShowingSeeds) return team.heat ? `<span class="text-xs text-blue-700 font-medium">Heat ${team.heat}</span>` : '';
+                const seedText = `Seed #${team.seedTied ? 'T' : ''}${team.seed}`;
+                if (!team.playedFinals) return `<span class="text-xs text-blue-700 font-medium">Heat ${team.heat} · ${seedText}, no Finals games yet</span>`;
+                if (team.grandFinalist) {
+                    const warn = team.heatRank > GRAND_FINAL_PER_HEAT ? ' <span class="text-orange-600">(check: not top ' + GRAND_FINAL_PER_HEAT + ' in heat)</span>' : '';
+                    return `<span class="text-xs text-green-700 font-medium">Grand Finalist · Heat ${team.heat}${team.droppedHeat || team.droppedHeat === 0 ? ` · dropped ${team.droppedHeat}` : ''}${warn}</span>`;
+                }
+                return `<span class="text-xs ${team.advances ? 'text-green-700' : 'text-gray-500'} font-medium">Heat ${team.heat} · ${ordinal(team.heatRank)} in heat${team.advances ? ' · in Grand Final position' : ''}</span>`;
             }
             if (team.isQualified) return '';
             return `<span class="text-xs text-orange-600 font-medium">${long ? `Not Qualified (needs ${QUALIFYING_MATCHES} games)` : 'Not Qualified'}</span>`;
